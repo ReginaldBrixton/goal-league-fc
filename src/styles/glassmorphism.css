@@ -1,0 +1,269 @@
+/* ===== Glassmorphism utilities ===== */
+:root {
+  --glass-bg: rgba(24, 34, 47, 0.65);
+  --glass-bg-light: rgba(31, 43, 58, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-strong: rgba(255, 255, 255, 0.15);
+  --glass-blur: 16px;
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --glass-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.4);
+  --gradient-accent: linear-gradient(135deg, #2fd47a 0%, #1e60c1 100%);
+  --gradient-accent-rev: linear-gradient(135deg, #1e60c1 0%, #2fd47a 100%);
+  --glow-accent: 0 0 20px rgba(47, 212, 122, 0.3);
+  --glow-accent-strong: 0 0 30px rgba(47, 212, 122, 0.5);
+  --glow-blue: 0 0 20px rgba(30, 96, 193, 0.3);
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
+  padding: 20px;
+}
+
+.glass-panel-sm {
+  background: var(--glass-bg-light);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-chip {
+  background: var(--glass-bg-light);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.glass-chip.accent {
+  background: rgba(47, 212, 122, 0.12);
+  border-color: rgba(47, 212, 122, 0.3);
+  color: var(--accent);
+}
+
+.glass-chip.blue {
+  background: rgba(30, 96, 193, 0.12);
+  border-color: rgba(30, 96, 193, 0.3);
+  color: #5a9bf5;
+}
+
+.glass-chip.gold {
+  background: rgba(240, 165, 0, 0.12);
+  border-color: rgba(240, 165, 0, 0.3);
+  color: var(--gold);
+}
+
+.glass-btn {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 12px 24px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-btn:hover {
+  background: var(--glass-bg-light);
+  border-color: var(--glass-border-strong);
+  transform: translateY(-2px);
+}
+
+.glass-btn.primary {
+  background: var(--gradient-accent);
+  border: none;
+  color: #06210f;
+  box-shadow: var(--glow-accent);
+}
+
+.glass-btn.primary:hover {
+  box-shadow: var(--glow-accent-strong);
+  transform: translateY(-2px);
+}
+
+.glass-btn.danger {
+  background: rgba(229, 57, 53, 0.15);
+  border-color: rgba(229, 57, 53, 0.3);
+  color: #ff6b6b;
+}
+
+.glass-btn.danger:hover {
+  background: rgba(229, 57, 53, 0.25);
+}
+
+.glass-btn.small {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.glass-btn.lg {
+  padding: 16px 36px;
+  font-size: 17px;
+  border-radius: var(--radius-lg);
+}
+
+.glass-input {
+  background: var(--glass-bg-light);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.glass-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(47, 212, 122, 0.1);
+}
+
+.glass-input::placeholder {
+  color: var(--muted);
+}
+
+.glass-nav-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.glass-nav-btn:hover {
+  color: var(--text);
+  background: var(--glass-bg-light);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.glass-nav-btn.active {
+  color: var(--text);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: var(--glass-border-strong);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.glass-table th {
+  background: var(--glass-bg-light);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.glass-table td {
+  padding: 10px 12px;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.glass-table tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.glow-text {
+  text-shadow: 0 0 20px rgba(47, 212, 122, 0.4);
+}
+
+.gradient-text {
+  background: var(--gradient-accent);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glass-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: 13px;
+  color: #fff;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.glass-badge.w {
+  background: rgba(47, 212, 122, 0.2);
+  border: 1px solid rgba(47, 212, 122, 0.4);
+  color: var(--accent);
+}
+
+.glass-badge.d {
+  background: rgba(138, 160, 182, 0.15);
+  border: 1px solid rgba(138, 160, 182, 0.3);
+  color: var(--muted);
+}
+
+.glass-badge.l {
+  background: rgba(229, 57, 53, 0.15);
+  border: 1px solid rgba(229, 57, 53, 0.3);
+  color: #ff6b6b;
+}
+
+.scene-container {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(15, 22, 32, 0.4) 0%, rgba(15, 22, 32, 0.1) 100%);
+}
+
+.scene-overlay {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.scene-overlay > * {
+  pointer-events: auto;
+}
+
+@media (max-width: 768px) {
+  .glass-panel {
+    padding: 14px;
+    border-radius: var(--radius-md);
+  }
+}

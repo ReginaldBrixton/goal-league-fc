@@ -1,0 +1,169 @@
+.skeleton {
+  background: linear-gradient(90deg, var(--panel) 25%, var(--panel2) 50%, var(--panel) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.sk-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid #243140;
+}
+
+.sk-brand {
+  width: 120px;
+  height: 28px;
+}
+
+.sk-nav {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+}
+
+.sk-nav-item {
+  width: 70px;
+  height: 34px;
+}
+
+.sk-budget {
+  width: 80px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.sk-save-btn {
+  width: 50px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.sk-content {
+  padding-top: 8px;
+}
+
+.sk-panel {
+  background: var(--panel);
+  border: 1px solid #243140;
+  border-radius: 12px;
+  padding: 18px;
+  margin: 16px 0;
+}
+
+.sk-title {
+  width: 180px;
+  height: 24px;
+  margin-bottom: 16px;
+}
+
+.sk-line {
+  width: 100%;
+  height: 16px;
+  margin-bottom: 10px;
+}
+
+.sk-line.short {
+  width: 60%;
+}
+
+.sk-line.medium {
+  width: 80%;
+}
+
+.sk-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.sk-card {
+  background: var(--panel);
+  border: 1px solid #243140;
+  border-radius: 12px;
+  padding: 18px;
+  min-height: 120px;
+}
+
+.sk-match-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px;
+  margin: 16px 0;
+}
+
+.sk-team-badge {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+}
+
+.sk-vs {
+  width: 30px;
+  height: 20px;
+}
+
+.sk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.sk-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.sk-table-row {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #243140;
+}
+
+.sk-table-cell {
+  height: 16px;
+  border-radius: 4px;
+}
+
+.sk-menu-hero {
+  text-align: center;
+  padding: 60px 0 40px;
+}
+
+.sk-menu-title {
+  width: 320px;
+  height: 48px;
+  margin: 0 auto 16px;
+}
+
+.sk-menu-sub {
+  width: 400px;
+  height: 20px;
+  margin: 0 auto 32px;
+}
+
+.sk-menu-btns {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.sk-menu-btn {
+  width: 160px;
+  height: 48px;
+  border-radius: 10px;
+}

@@ -1,0 +1,65 @@
+/* ===== League Table page ===== */
+.league {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.league th,
+.league td {
+  padding: 10px 8px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.league th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--glass-bg-light);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.league td {
+  font-size: 14px;
+}
+
+.league tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.league .team-cell {
+  text-align: left;
+  font-weight: 700;
+}
+
+.league .pts {
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.league .user-row td {
+  background: rgba(47, 212, 122, 0.08);
+}
+
+.league .champion-place td {
+  border-bottom: 2px solid rgba(240, 165, 0, 0.3);
+}
+
+.league .top-place td {
+  border-bottom: 2px solid rgba(47, 212, 122, 0.2);
+}
+
+.league-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  border-radius: 12px;
+}

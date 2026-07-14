@@ -1,0 +1,356 @@
+/* ===== Landing / Main Menu page ===== */
+.landing {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* animated pitch backdrop */
+.pitch-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse at 50% 0%, #1a3a1a 0%, #0f1620 70%),
+    repeating-linear-gradient(90deg, #163a16 0 8%, #143614 8% 16%);
+  pointer-events: none;
+}
+
+.pitch-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 0%, rgba(15, 22, 32, 0.6) 80%);
+}
+
+.pitch-line,
+.pitch-circle,
+.pitch-box {
+  position: absolute;
+  border: 2px solid rgba(255, 255, 255, 0.06);
+}
+
+.center-line {
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 0;
+}
+
+.center-circle {
+  left: 50%;
+  top: 50%;
+  width: 200px;
+  height: 200px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
+.pitch-box {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 140px;
+  height: 320px;
+  border-radius: 4px;
+}
+
+.left-box { left: 0; }
+.right-box { right: 0; }
+
+.ball-anim {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #111;
+  top: 50%;
+  left: 50%;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+  animation: ballFloat 8s ease-in-out infinite;
+}
+
+@keyframes ballFloat {
+  0%, 100% { transform: translate(-50%, -50%) translate(0, 0); }
+  25% { transform: translate(-50%, -50%) translate(180px, -120px); }
+  50% { transform: translate(-50%, -50%) translate(320px, 60px); }
+  75% { transform: translate(-50%, -50%) translate(120px, 140px); }
+}
+
+/* hero */
+.hero {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 90px 20px 50px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.hero-badge {
+  display: inline-block;
+  background: rgba(47, 212, 122, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(47, 212, 122, 0.3);
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin-bottom: 24px;
+}
+
+.hero-title {
+  font-size: clamp(48px, 10vw, 96px);
+  font-weight: 900;
+  margin: 0;
+  letter-spacing: 3px;
+  line-height: 1;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+.hero-accent {
+  color: var(--accent);
+  margin-left: 8px;
+  text-shadow: 0 0 40px rgba(47, 212, 122, 0.5);
+}
+
+.hero-subtitle {
+  color: var(--muted);
+  font-size: clamp(16px, 3vw, 22px);
+  margin-top: 16px;
+  font-weight: 400;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin: 32px 0;
+  flex-wrap: wrap;
+}
+
+/* team picker */
+.pick-team {
+  position: relative;
+  z-index: 1;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.pick-title {
+  text-align: center;
+  font-size: 24px;
+  margin-bottom: 24px;
+}
+
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+  margin: 20px 0;
+}
+
+.team-pick {
+  position: relative;
+  background: var(--panel);
+  border: 2px solid #243140;
+  border-radius: 14px;
+  padding: 20px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 110px;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.team-pick:hover {
+  transform: translateY(-3px);
+  border-color: #3a5068;
+}
+
+.team-pick.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(47, 212, 122, 0.2), 0 8px 24px rgba(0, 0, 0, 0.3);
+  transform: translateY(-3px);
+}
+
+.tk-crest {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.tk-check {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.tp-name {
+  font-size: 13px;
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* features section */
+.features {
+  position: relative;
+  z-index: 1;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.feature-card {
+  background: var(--panel);
+  border: 1px solid #243140;
+  border-radius: 14px;
+  padding: 24px;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.feature-card:hover {
+  transform: translateY(-3px);
+  border-color: #3a5068;
+}
+
+.feature-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.feature-card h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.feature-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* how to play */
+.how-to {
+  position: relative;
+  z-index: 1;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px 20px 40px;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.step {
+  background: var(--panel);
+  border: 1px solid #243140;
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.step-num {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #06210f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.step p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* controls preview */
+.controls-preview {
+  position: relative;
+  z-index: 1;
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 20px 20px 50px;
+}
+
+.ctrl-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+}
+
+.ctrl {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid #243140;
+  border-radius: 10px;
+  padding: 10px 16px;
+}
+
+.ctrl kbd {
+  background: #0a1218;
+  border: 1px solid #2f3d50;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: 'Consolas', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 28px;
+  text-align: center;
+}
+
+.ctrl span {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* footer */
+.landing-footer {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 30px 20px 50px;
+  border-top: 1px solid #1a2533;
+}
+
+.landing-footer p {
+  margin: 4px 0;
+  font-size: 13px;
+}
