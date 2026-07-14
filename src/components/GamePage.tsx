@@ -3,13 +3,18 @@ import { useNavigate } from '@tanstack/react-router';
 import { useGame } from '../store/gameStore';
 import { bestXI } from '../engine/simEngine';
 import {
-  MatchEngine,
   type HudState,
   type InputState,
 } from '../engine/matchEngine';
+import {
+  createStrategicMatchEngine,
+  getMatchDebugSnapshot,
+} from '../engine/strategicMatchEngine';
 import type { MatchResult, Player } from '../types';
+import { usePressControls } from '../input/usePressControls';
 import { LiveMatch3D } from '../three/LiveMatch3D';
 import { readMatchSettings } from '../utils/matchSettings';
+import './GameControls.css';
 
 interface GamePageProps {
   gameId: string;
@@ -65,6 +70,15 @@ function adjustDifficulty(players: Player[], amount: number): Player[] {
   }));
 }
 
+function ArrowIcon({ direction }: { direction: 'up' | 'down' | 'left' | 'right' }) {
+  const rotations = { up: 0, right: 90, down: 180, left: 270 } as const;
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" style={{ transform: `rotate(${rotations[direction]}deg)` }}>
+      <path d="M12 4 4.5 13h4.7v7h5.6v-7h4.7L12 4Z" />
+    </svg>
+  );
+}
+
 export function GamePage({ gameId }: GamePageProps) {
   const navigate = useNavigate();
   const teams = useGame((state) => state.teams);
@@ -96,10 +110,11 @@ export function GamePage({ gameId }: GamePageProps) {
   const [result, setResult] = useState<MatchResult | null>(null);
   const inputRef = useRef<InputState>(emptyInput());
   const submittedRef = useRef(false);
+  const { bindPress, pressedActions, clearPresses } = usePressControls(inputRef, paused || Boolean(result));
 
   const engine = useMemo(() => {
     if (!home || !away || homeXI.length === 0 || awayXI.length === 0) return null;
-    return new MatchEngine(
+    return createStrategicMatchEngine(
       home,
       away,
       homeXI,
@@ -108,15 +123,17 @@ export function GamePage({ gameId }: GamePageProps) {
         formation: '4-3-3',
         userSide,
         realSecondsPerMatchHalf: settings.duration,
+        aiLevel: settings.difficulty,
       },
       { onHud: setHud },
       [...gameId].reduce((seed, char) => ((seed * 31) + char.charCodeAt(0)) >>> 0, 97),
     );
-  }, [away, awayXI, gameId, home, homeXI, settings.duration, userSide]);
+  }, [away, awayXI, gameId, home, homeXI, settings.difficulty, settings.duration, userSide]);
 
   const clearInput = useCallback(() => {
+    clearPresses();
     inputRef.current = emptyInput();
-  }, []);
+  }, [clearPresses]);
 
   const togglePause = useCallback(() => {
     clearInput();
@@ -164,17 +181,29 @@ export function GamePage({ gameId }: GamePageProps) {
     };
   }, [clearInput, paused, result, togglePause]);
 
+  useEffect(() => {
+    if (!engine || !new URLSearchParams(window.location.search).has('debugControls')) return;
+    const debugWindow = window as typeof window & {
+      __goalLeagueDebug?: {
+        snapshot: () => ReturnType<typeof getMatchDebugSnapshot>;
+        input: () => InputState;
+      };
+    };
+    debugWindow.__goalLeagueDebug = {
+      snapshot: () => getMatchDebugSnapshot(engine),
+      input: () => ({ ...inputRef.current }),
+    };
+    return () => {
+      delete debugWindow.__goalLeagueDebug;
+    };
+  }, [engine]);
+
   const finishMatch = useCallback((nextResult: MatchResult) => {
     clearInput();
     setHud(engine?.getHud() ?? null);
     setResult(nextResult);
     setPaused(true);
   }, [clearInput, engine]);
-
-  const setTouchAction = (action: InputAction, pressed: boolean) => {
-    if (paused || result) return;
-    inputRef.current[action] = pressed;
-  };
 
   const continueCareer = () => {
     if (result && fixture && !submittedRef.current) {
@@ -201,7 +230,7 @@ export function GamePage({ gameId }: GamePageProps) {
   const activeName = hud?.activePlayerName ?? 'Selecting player';
 
   return (
-    <main className="game-screen">
+    <main className="game-screen" onContextMenu={(event) => event.preventDefault()}>
       <div className="game-viewport">
         <LiveMatch3D
           engine={engine}
@@ -244,13 +273,22 @@ export function GamePage({ gameId }: GamePageProps) {
 
       <button type="button" className="game-pause-button" onClick={togglePause} aria-label="Pause match">Ⅱ</button>
 
-      <div className="game-touch-controls" aria-label="On-screen football controls">
-        <div className="game-stick">
-          <button type="button" className="stick-up" aria-label="Move up" onPointerDown={() => setTouchAction('up', true)} onPointerUp={() => setTouchAction('up', false)} onPointerCancel={() => setTouchAction('up', false)}>▲</button>
-          <button type="button" className="stick-left" aria-label="Move left" onPointerDown={() => setTouchAction('left', true)} onPointerUp={() => setTouchAction('left', false)} onPointerCancel={() => setTouchAction('left', false)}>◀</button>
-          <button type="button" className="stick-down" aria-label="Move down" onPointerDown={() => setTouchAction('down', true)} onPointerUp={() => setTouchAction('down', false)} onPointerCancel={() => setTouchAction('down', false)}>▼</button>
-          <button type="button" className="stick-right" aria-label="Move right" onPointerDown={() => setTouchAction('right', true)} onPointerUp={() => setTouchAction('right', false)} onPointerCancel={() => setTouchAction('right', false)}>▶</button>
-          <i />
+      <div className="game-touch-controls" aria-label="On-screen football controls" onContextMenu={(event) => event.preventDefault()}>
+        <div className="game-stick" role="group" aria-label="Movement controls">
+          {(['up', 'left', 'down', 'right'] as const).map((direction) => (
+            <button
+              type="button"
+              key={direction}
+              className={`stick-${direction}${pressedActions.has(direction) ? ' is-pressed' : ''}`}
+              aria-label={`Move ${direction}`}
+              aria-pressed={pressedActions.has(direction)}
+              data-pressed={pressedActions.has(direction) ? 'true' : 'false'}
+              {...bindPress(direction)}
+            >
+              <ArrowIcon direction={direction} />
+            </button>
+          ))}
+          <i aria-hidden="true" />
         </div>
         <div className="game-action-buttons">
           {([
@@ -262,10 +300,11 @@ export function GamePage({ gameId }: GamePageProps) {
             <button
               type="button"
               key={action}
-              className={`game-action ${action}`}
-              onPointerDown={() => setTouchAction(action, true)}
-              onPointerUp={() => setTouchAction(action, false)}
-              onPointerCancel={() => setTouchAction(action, false)}
+              className={`game-action ${action}${pressedActions.has(action) ? ' is-pressed' : ''}`}
+              aria-label={label.charAt(0) + label.slice(1).toLowerCase()}
+              aria-pressed={pressedActions.has(action)}
+              data-pressed={pressedActions.has(action) ? 'true' : 'false'}
+              {...bindPress(action)}
             >
               <b>{key}</b><span>{label}</span>
             </button>
