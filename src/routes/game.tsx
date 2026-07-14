@@ -6,6 +6,11 @@ import { rootRoute } from './root';
 
 const GamePage = lazy(() => import('../components/GamePage').then((module) => ({ default: module.GamePage })));
 
+function ensureCareerLoaded(): boolean {
+  const state = useGame.getState();
+  return Boolean(state.userTeam) || state.continueCareer();
+}
+
 function GameRouteComponent() {
   const { gameId } = gameRoute.useParams();
   return (
@@ -19,7 +24,7 @@ export const gameRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/game/$gameId',
   beforeLoad: () => {
-    if (!useGame.getState().userTeam) throw redirect({ to: '/' });
+    if (!ensureCareerLoaded()) throw redirect({ to: '/' });
   },
   component: GameRouteComponent,
 });
