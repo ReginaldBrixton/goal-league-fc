@@ -28,6 +28,10 @@
   user-select: none;
 }
 
+.game-stick button {
+  border-radius: 50%;
+}
+
 .game-stick button svg {
   width: 22px;
   height: 22px;
@@ -51,6 +55,7 @@
 .game-stick button.is-pressed,
 .game-stick button[data-pressed='true'] {
   color: #07170e;
+  border-radius: 50%;
   background: linear-gradient(145deg, #d8ff50, #31f28f);
   box-shadow:
     0 0 0 4px rgba(49, 242, 143, 0.18),
