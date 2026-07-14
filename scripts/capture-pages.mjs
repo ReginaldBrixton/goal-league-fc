@@ -20,12 +20,9 @@ const browser = await chromium.launch({
 });
 
 async function pressAndHoldMobileControl(page, context) {
-  const current = new URL(page.url());
-  current.searchParams.set('debugControls', '1');
-  await page.goto(current.toString(), { waitUntil: 'domcontentloaded' });
   await page.locator('.game-screen').waitFor({ state: 'visible' });
   await page.locator('.live-match-canvas canvas').waitFor({ state: 'visible', timeout: 20_000 });
-  await page.waitForFunction(() => Boolean(window.__goalLeagueDebug?.snapshot().activeUser));
+  await page.waitForFunction(() => Boolean(window.__goalLeagueDebug?.snapshot().activeUser), null, { timeout: 20_000 });
 
   const control = page.getByRole('button', { name: 'Move right' });
   const box = await control.boundingBox();
