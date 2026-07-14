@@ -6,6 +6,7 @@ import { useGame } from '../store/gameStore';
 import { PlayerScene } from '../three/PlayerScene';
 import { Pitch3D } from '../three/Pitch3D';
 import { PlayerModel } from '../three/PlayerModel';
+import { CAREER_PLAYER_SCALE, DETAIL_MAX_DPR } from '../three/playerPresentation';
 
 const FLAGS = ['🇬🇭', '🇬🇧', '🇵🇹', '🇩🇪', '🇳🇱', '🇧🇷', '🇯🇵', '🇫🇷', '🇺🇸', '🇿🇦'];
 const IDENTITIES = [
@@ -70,12 +71,19 @@ export function StartCareer() {
         <div className="career-kit-stage">
           <div className="career-kit-lights" />
           <Suspense fallback={<div className="career-kit-fallback" />}>
-            <PlayerScene cameraMode="card" shadows className="career-kit-canvas" cameraPosition={[0, 1.45, 3.2]} fov={34}>
+            <PlayerScene
+              cameraMode="card"
+              shadows
+              className="career-kit-canvas"
+              cameraPosition={[0, 1.35, 3.9]}
+              fov={36}
+              maxDpr={DETAIL_MAX_DPR}
+            >
               <Pitch3D width={4.2} length={6.4} />
               <PlayerModel
-                position={[0, 0.02, 0.2]}
+                position={[0, 0.02, 0.14]}
                 rotation={[0, Math.PI, 0]}
-                scale={1.42}
+                scale={CAREER_PLAYER_SCALE}
                 teamId={selected.short}
                 primaryColor={selected.color}
                 secondaryColor={selected.color2}
@@ -83,21 +91,22 @@ export function StartCareer() {
                 animation="idle"
                 skinColor={selectedIndex % 3 === 0 ? '#6a4332' : selectedIndex % 3 === 1 ? '#d5a077' : '#9d6b4d'}
                 highlight
+                variant="detail"
               />
               <OrbitControls
                 makeDefault
                 enablePan={false}
                 enableZoom
-                minDistance={2.5}
-                maxDistance={4.5}
+                minDistance={3.3}
+                maxDistance={5.2}
                 minPolarAngle={Math.PI / 3}
                 maxPolarAngle={Math.PI / 2.05}
                 autoRotate
-                autoRotateSpeed={0.8}
-                target={[0, 0.7, 0]}
+                autoRotateSpeed={0.55}
+                target={[0, 0.72, 0]}
               />
-              <spotLight position={[2.8, 5, 3]} intensity={3} angle={0.5} penumbra={0.7} color={selected.color2} castShadow />
-              <pointLight position={[-2, 1.5, 1]} intensity={2.4} color={selected.color} />
+              <spotLight position={[2.8, 5, 3]} intensity={2.5} angle={0.5} penumbra={0.7} color={selected.color2} castShadow />
+              <pointLight position={[-2, 1.5, 1]} intensity={2} color={selected.color} />
             </PlayerScene>
           </Suspense>
           <div className="career-drag-hint">DRAG TO ROTATE · PINCH TO ZOOM</div>
