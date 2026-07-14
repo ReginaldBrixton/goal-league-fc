@@ -182,7 +182,8 @@ export function GamePage({ gameId }: GamePageProps) {
   }, [clearInput, paused, result, togglePause]);
 
   useEffect(() => {
-    if (!engine || !new URLSearchParams(window.location.search).has('debugControls')) return;
+    const diagnosticsEnabled = navigator.webdriver || new URLSearchParams(window.location.search).has('debugControls');
+    if (!engine || !diagnosticsEnabled) return;
     const debugWindow = window as typeof window & {
       __goalLeagueDebug?: {
         snapshot: () => ReturnType<typeof getMatchDebugSnapshot>;
