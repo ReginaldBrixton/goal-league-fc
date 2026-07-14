@@ -14,6 +14,12 @@ import { PlayerScene } from './PlayerScene';
 import { Pitch3D } from './Pitch3D';
 import { PlayerModel } from './PlayerModel';
 import type { AnimTag } from './animations';
+import { getMatchCameraPose } from './matchCamera';
+import {
+  isCompactMatchViewport,
+  LIVE_PLAYER_SCALE,
+  MATCH_MAX_DPR,
+} from './playerPresentation';
 
 interface EngineInternals {
   entities: Entity[];
@@ -61,12 +67,16 @@ function LivePlayer({
   index,
   home,
   away,
+  compact,
+  shadows,
 }: {
   engine: MatchEngine;
   entity: Entity;
   index: number;
   home: Team;
   away: Team;
+  compact: boolean;
+  shadows: boolean;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const [animation, setAnimation] = useState<AnimTag>('idle');
@@ -110,7 +120,7 @@ function LivePlayer({
   return (
     <group ref={groupRef}>
       <PlayerModel
-        scale={0.34}
+        scale={LIVE_PLAYER_SCALE}
         teamId={team.id}
         primaryColor={team.color}
         secondaryColor={team.color2}
@@ -119,6 +129,8 @@ function LivePlayer({
         animation={animation}
         skinColor={stableSkin(entity.player.id)}
         highlight={isActive}
+        variant="match"
+        shadows={shadows && !compact}
       />
     </group>
   );
@@ -132,14 +144,14 @@ function LiveBall({ engine }: { engine: MatchEngine }) {
     if (!ball) return;
     const internals = readEngine(engine);
     const target = pitchPosition(internals.ball);
-    ball.position.set(target[0], 0.16, target[2]);
+    ball.position.set(target[0], 0.105, target[2]);
     ball.rotation.x += delta * 4.4;
     ball.rotation.z += delta * 3.1;
   });
 
   return (
     <mesh ref={ballRef} castShadow>
-      <sphereGeometry args={[0.105, 24, 24]} />
+      <sphereGeometry args={[0.072, 16, 16]} />
       <meshStandardMaterial color="#f8fbff" roughness={0.48} metalness={0.04} />
     </mesh>
   );
@@ -188,7 +200,7 @@ function MatchCameraRig({
   cameraMode: MatchCamera;
   controlBasisRef: MutableRefObject<CameraControlBasis>;
 }) {
-  const { camera } = useThree();
+  const { camera, size } = useThree();
   const lookAt = useRef(new THREE.Vector3());
   const targetPosition = useRef(new THREE.Vector3());
   const cameraRight = useRef(new THREE.Vector3());
@@ -199,19 +211,15 @@ function MatchCameraRig({
     const focusEntity = internals.entities.find((entity) => entity.id === internals.activeUserId);
     const focus = focusEntity?.pos ?? internals.ball;
     const world = pitchPosition(focus);
+    const pose = getMatchCameraPose(cameraMode, size.width / Math.max(1, size.height), {
+      x: world[0],
+      y: world[1],
+      z: world[2],
+    });
 
-    if (cameraMode === 'tactical') {
-      targetPosition.current.set(0, 9.6, 0.05);
-      lookAt.current.set(0, 0, 0);
-    } else if (cameraMode === 'dynamic') {
-      targetPosition.current.set(world[0] * 0.55 + 4.1, 3.1, world[2] - 4.7);
-      lookAt.current.set(world[0], 0.2, world[2] + 0.7);
-    } else {
-      targetPosition.current.set(world[0] * 0.24 + 5.5, 4.2, world[2] * 0.35 + 1.8);
-      lookAt.current.set(world[0] * 0.72, 0.08, world[2]);
-    }
-
-    camera.position.lerp(targetPosition.current, 0.045);
+    targetPosition.current.set(pose.position.x, pose.position.y, pose.position.z);
+    lookAt.current.set(pose.lookAt.x, pose.lookAt.y, pose.lookAt.z);
+    camera.position.lerp(targetPosition.current, pose.lerp);
     camera.lookAt(lookAt.current);
 
     cameraRight.current.set(1, 0, 0).applyQuaternion(camera.quaternion);
@@ -236,8 +244,9 @@ function MatchCameraRig({
   return null;
 }
 
-function Stadium({ graphics }: { graphics: MatchGraphics }) {
-  const crowdRows = graphics === 'battery' ? 2 : graphics === 'ultra' ? 6 : 4;
+function Stadium({ graphics, compact }: { graphics: MatchGraphics; compact: boolean }) {
+  const requestedRows = graphics === 'battery' ? 2 : graphics === 'ultra' ? 6 : 4;
+  const crowdRows = compact ? Math.min(2, requestedRows) : requestedRows;
   const rows = useMemo(() => Array.from({ length: crowdRows }, (_, index) => index), [crowdRows]);
 
   return (
@@ -258,7 +267,7 @@ function Stadium({ graphics }: { graphics: MatchGraphics }) {
         <boxGeometry args={[8.6, 0.14, 12.4]} />
         <meshStandardMaterial color="#071019" roughness={0.92} />
       </mesh>
-      {[-1, 1].flatMap((side) => [-1, 1].map((end) => (
+      {!compact && [-1, 1].flatMap((side) => [-1, 1].map((end) => (
         <group key={`${side}-${end}`} position={[side * 4.1, 2.5, end * 4.7]}>
           <mesh>
             <cylinderGeometry args={[0.055, 0.075, 5, 10]} />
@@ -279,6 +288,9 @@ function Stadium({ graphics }: { graphics: MatchGraphics }) {
 
 function LiveScene(props: LiveMatch3DProps) {
   const entities = useMemo(() => readEngine(props.engine).entities, [props.engine]);
+  const { size } = useThree();
+  const compact = isCompactMatchViewport(size.width, size.height);
+  const renderShadows = !compact && props.graphics !== 'battery';
   const controlBasisRef = useRef<CameraControlBasis>({
     screenRight: { x: 1, y: 0 },
     screenUp: { x: 0, y: -1 },
@@ -286,7 +298,7 @@ function LiveScene(props: LiveMatch3DProps) {
 
   return (
     <>
-      <fog attach="fog" args={['#071019', 12, 24]} />
+      <fog attach="fog" args={['#071019', compact ? 16 : 12, compact ? 30 : 24]} />
       <EngineDriver
         engine={props.engine}
         inputRef={props.inputRef}
@@ -295,7 +307,7 @@ function LiveScene(props: LiveMatch3DProps) {
         controlBasisRef={controlBasisRef}
       />
       <MatchCameraRig engine={props.engine} cameraMode={props.cameraMode} controlBasisRef={controlBasisRef} />
-      <Stadium graphics={props.graphics} />
+      <Stadium graphics={props.graphics} compact={compact} />
       <Pitch3D width={6} length={10} showBall={false} />
       {entities.map((entity, index) => (
         <LivePlayer
@@ -305,15 +317,17 @@ function LiveScene(props: LiveMatch3DProps) {
           index={index}
           home={props.home}
           away={props.away}
+          compact={compact}
+          shadows={renderShadows}
         />
       ))}
       <LiveBall engine={props.engine} />
-      <hemisphereLight intensity={0.75} color="#e7f7ff" groundColor="#09110c" />
+      <hemisphereLight intensity={compact ? 1 : 0.75} color="#e7f7ff" groundColor="#09110c" />
       <directionalLight
         position={[4, 9, 3]}
-        intensity={props.graphics === 'battery' ? 0.9 : 1.75}
-        castShadow={props.graphics !== 'battery'}
-        shadow-mapSize={props.graphics === 'ultra' ? 2048 : 1024}
+        intensity={props.graphics === 'battery' ? 0.9 : compact ? 1.25 : 1.75}
+        castShadow={renderShadows}
+        shadow-mapSize={props.graphics === 'ultra' ? 1536 : 768}
         shadow-camera-left={-7}
         shadow-camera-right={7}
         shadow-camera-top={7}
@@ -337,6 +351,7 @@ export function LiveMatch3D(props: LiveMatch3DProps) {
       fov={props.cameraMode === 'tactical' ? 45 : 48}
       shadows={props.graphics !== 'battery'}
       className="live-match-canvas"
+      maxDpr={MATCH_MAX_DPR}
     >
       <LiveScene {...props} />
     </PlayerScene>
