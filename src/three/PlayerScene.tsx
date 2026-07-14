@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
+import { DETAIL_MAX_DPR } from './playerPresentation';
 
 export type CameraMode = 'hero' | 'topdown' | 'broadcast' | 'card' | 'lineup';
 
@@ -12,6 +13,7 @@ export interface PlayerSceneProps {
   className?: string;
   cameraPosition?: [number, number, number];
   fov?: number;
+  maxDpr?: number;
 }
 
 const CAMERA_PRESETS: Record<CameraMode, { position: [number, number, number]; fov: number }> = {
@@ -30,19 +32,25 @@ export function PlayerScene({
   className,
   cameraPosition,
   fov,
+  maxDpr = DETAIL_MAX_DPR,
 }: PlayerSceneProps) {
   const preset = CAMERA_PRESETS[cameraMode];
   const pos = cameraPosition ?? preset.position;
-  const f = fov ?? preset.fov;
+  const resolvedFov = fov ?? preset.fov;
 
   return (
     <div className={className} style={{ width: '100%', height: '100%' }}>
       <Canvas
         shadows={shadows}
         frameloop={frameloop}
-        dpr={[1, 2]}
-        camera={{ position: pos, fov: f, near: 0.1, far: 100 }}
-        gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+        dpr={[1, Math.max(1, maxDpr)]}
+        camera={{ position: pos, fov: resolvedFov, near: 0.1, far: 100 }}
+        gl={{
+          antialias: true,
+          alpha: true,
+          powerPreference: 'high-performance',
+          preserveDrawingBuffer: false,
+        }}
         onCreated={({ gl }) => {
           gl.setClearColor(new THREE.Color(0x000000), 0);
         }}
