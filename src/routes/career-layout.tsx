@@ -4,7 +4,7 @@ import { useGame } from '../store/gameStore';
 import { MenuSkeleton } from '../components/Skeletons';
 import { rootRoute } from './root';
 
-const MainMenu = lazy(() => import('../components/MainMenu').then((m) => ({ default: m.MainMenu })));
+const MainMenu = lazy(() => import('../components/MainMenu').then((module) => ({ default: module.MainMenu })));
 
 const NAV: { path: string; label: string }[] = [
   { path: '/hub', label: 'Hub' },
@@ -14,10 +14,15 @@ const NAV: { path: string; label: string }[] = [
   { path: '/table', label: 'Table' },
 ];
 
+function ensureCareerLoaded(): boolean {
+  const state = useGame.getState();
+  return Boolean(state.userTeam) || state.continueCareer();
+}
+
 function CareerLayout() {
-  const userTeam = useGame((s) => s.userTeam);
-  const doSave = useGame((s) => s.doSave);
-  const pathname = useLocation({ select: (l) => l.pathname });
+  const userTeam = useGame((state) => state.userTeam);
+  const doSave = useGame((state) => state.doSave);
+  const pathname = useLocation({ select: (location) => location.pathname });
 
   if (!userTeam) {
     return (
@@ -35,13 +40,13 @@ function CareerLayout() {
           <span className="brand-text">Goal League FC</span>
         </Link>
         <nav className="nav">
-          {NAV.map((n) => (
+          {NAV.map((item) => (
             <Link
-              key={n.path}
-              to={n.path}
-              className={`nav-btn${pathname === n.path ? ' active' : ''}`}
+              key={item.path}
+              to={item.path}
+              className={`nav-btn${pathname === item.path ? ' active' : ''}`}
             >
-              {n.label}
+              {item.label}
             </Link>
           ))}
         </nav>
@@ -62,9 +67,7 @@ export const careerLayoutRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'career',
   beforeLoad: () => {
-    if (!useGame.getState().userTeam) {
-      throw redirect({ to: '/' });
-    }
+    if (!ensureCareerLoaded()) throw redirect({ to: '/' });
   },
   component: CareerLayout,
 });
