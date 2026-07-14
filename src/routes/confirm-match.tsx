@@ -6,6 +6,11 @@ import { rootRoute } from './root';
 
 const ConfirmMatchPage = lazy(() => import('../components/ConfirmMatchPage').then((module) => ({ default: module.ConfirmMatchPage })));
 
+function ensureCareerLoaded(): boolean {
+  const state = useGame.getState();
+  return Boolean(state.userTeam) || state.continueCareer();
+}
+
 function ConfirmMatchRouteComponent() {
   const { matchId } = confirmMatchRoute.useParams();
   return (
@@ -19,7 +24,7 @@ export const confirmMatchRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/confirm-match/$matchId',
   beforeLoad: () => {
-    if (!useGame.getState().userTeam) throw redirect({ to: '/' });
+    if (!ensureCareerLoaded()) throw redirect({ to: '/' });
   },
   component: ConfirmMatchRouteComponent,
 });
