@@ -4,6 +4,7 @@ import { LeagueTable } from './LeagueTable';
 import { PlayerScene } from '../three/PlayerScene';
 import { HubScene3D } from '../three/HubScene3D';
 import './CareerHub.css';
+import './CareerHubNative.css';
 
 function formatBudget(value: number): string {
   return value >= 1_000_000 ? `$${(value / 1_000_000).toFixed(2)}M` : `$${Math.round(value / 1_000)}k`;
@@ -54,7 +55,7 @@ export function CareerHub() {
   );
   const recentNews = useMemo(() => [...log].slice(-8).reverse(), [log]);
   const squadPlayers = useMemo(
-    () => players.filter((p) => p.teamId === userTeam?.id).sort((a, b) => b.rating - a.rating).slice(0, 8),
+    () => players.filter((player) => player.teamId === userTeam?.id).sort((a, b) => b.rating - a.rating).slice(0, 8),
     [players, userTeam?.id],
   );
 
@@ -65,10 +66,10 @@ export function CareerHub() {
   const isHome = nextFixture?.homeId === userTeam.id;
   const opponent = isHome ? away : home;
 
-  const positionSuffix = (pos: number) => {
-    if (pos === 1) return 'st';
-    if (pos === 2) return 'nd';
-    if (pos === 3) return 'rd';
+  const positionSuffix = (position: number) => {
+    if (position === 1) return 'st';
+    if (position === 2) return 'nd';
+    if (position === 3) return 'rd';
     return 'th';
   };
 

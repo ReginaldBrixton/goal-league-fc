@@ -1,6 +1,6 @@
 import { useRef, useMemo, lazy } from 'react';
 import * as THREE from 'three';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { PlayerModel } from './PlayerModel';
 import { Pitch3D } from './Pitch3D';
 import type { AnimTag } from './animations';
@@ -27,7 +27,7 @@ function AnimatedPlayer({
   const z = Math.sin(angle) * radius;
   const facing = Math.atan2(-x, -z);
 
-  const anim = ANIM_CYCLE[(animIndex + index) % ANIM_CYCLE.length];
+  const animation = ANIM_CYCLE[(animIndex + index) % ANIM_CYCLE.length];
 
   return (
     <PlayerModel
@@ -39,23 +39,25 @@ function AnimatedPlayer({
       secondaryColor={team.color2}
       number={index + 1}
       isGK={player.position === 'GK'}
-      animation={anim}
+      animation={animation}
     />
   );
 }
 
 function OrbitCamera() {
-  const ref = useRef<THREE.PerspectiveCamera>(null);
+  const { camera, size } = useThree();
+  const focus = useMemo(() => new THREE.Vector3(0, 0.42, 0), []);
+
   useFrame((state) => {
-    const t = state.clock.getElapsedTime();
-    if (ref.current) {
-      const radius = 6;
-      ref.current.position.x = Math.sin(t * 0.15) * radius;
-      ref.current.position.z = Math.cos(t * 0.15) * radius;
-      ref.current.position.y = 3.5 + Math.sin(t * 0.1) * 0.3;
-      ref.current.lookAt(0, 0.5, 0);
-    }
+    const time = state.clock.getElapsedTime();
+    const narrow = size.width < 620;
+    const radius = narrow ? 7.4 : 6.2;
+    camera.position.x = Math.sin(time * 0.13) * radius;
+    camera.position.z = Math.cos(time * 0.13) * radius;
+    camera.position.y = narrow ? 4.7 : 3.8 + Math.sin(time * 0.1) * 0.25;
+    camera.lookAt(focus);
   });
+
   return null;
 }
 
@@ -81,12 +83,12 @@ export function HubScene3D({ players, team, maxPlayers = 8 }: HubScene3DProps) {
       <OrbitCamera />
       <Pitch3D width={5} length={7} />
       <group>
-        {displayPlayers.map((player, i) => (
+        {displayPlayers.map((player, index) => (
           <AnimatedPlayer
             key={player.id}
             player={player}
             team={team}
-            index={i}
+            index={index}
             totalPlayers={displayPlayers.length}
             animIndex={animIndex.current}
           />

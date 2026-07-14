@@ -1,0 +1,67 @@
+name: Quality and Screenshots
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Install Playwright for capture
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Launch preview server
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/goal-league-preview.log 2>&1 &
+          echo $! > /tmp/goal-league-preview.pid
+          for attempt in {1..45}; do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/goal-league-preview.log
+          exit 1
+
+      - name: Capture routed interfaces
+        run: node scripts/capture-pages.mjs
+
+      - name: Upload interface screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: goal-league-interface-screenshots
+          path: screenshots/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Show preview log on failure
+        if: failure()
+        run: cat /tmp/goal-league-preview.log || true

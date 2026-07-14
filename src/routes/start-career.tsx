@@ -3,14 +3,14 @@ import { createRoute } from '@tanstack/react-router';
 import { MenuSkeleton } from '../components/Skeletons';
 import { rootRoute } from './root';
 
-const MainMenu = lazy(() => import('../components/MainMenu').then((module) => ({ default: module.MainMenu })));
+const StartCareer = lazy(() => import('../components/StartCareer').then((module) => ({ default: module.StartCareer })));
 
-export const indexRoute = createRoute({
+export const startCareerRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/',
+  path: '/start-career',
   component: () => (
     <Suspense fallback={<MenuSkeleton />}>
-      <MainMenu />
+      <StartCareer />
     </Suspense>
   ),
 });

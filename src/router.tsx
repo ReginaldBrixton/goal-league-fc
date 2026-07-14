@@ -1,6 +1,7 @@
 import { createRouter } from '@tanstack/react-router';
 import './styles/global.css';
 import './styles/skeletons.css';
+import './styles/advanced-flow.css';
 import { routeTree } from './routeTree';
 
 export const router = createRouter({
