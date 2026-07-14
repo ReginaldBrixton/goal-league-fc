@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:ssr": "tsx server.ts",
+    "test": "tsx --test tests/*.test.ts",
     "build": "tsc -b && vite build",
     "build:ssr": "tsc -b && vite build && vite build --ssr server.ts --outDir dist/server",
     "preview": "vite preview",
