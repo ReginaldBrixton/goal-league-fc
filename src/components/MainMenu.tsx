@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { useGame } from '../store/gameStore';
 import { hasSave } from '../utils/storage';
-import { clubNames } from '../data/names';
+import { PlayerScene } from '../three/PlayerScene';
+import { LandingScene3D } from '../three/LandingScene3D';
 import './MainMenu.css';
 
 function readHasSave(): boolean {
@@ -13,12 +15,9 @@ function readHasSave(): boolean {
 }
 
 export function MainMenu() {
-  const newCareer = useGame((state) => state.newCareer);
+  const navigate = useNavigate();
   const continueCareer = useGame((state) => state.continueCareer);
   const [hasExisting, setHasExisting] = useState(readHasSave);
-  const [showPick, setShowPick] = useState(false);
-  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
-  const [pick, setPick] = useState(0);
 
   useEffect(() => {
     const refresh = () => setHasExisting(readHasSave());
@@ -32,78 +31,63 @@ export function MainMenu() {
     };
   }, []);
 
-  const selectedClub = useMemo(() => clubNames[pick] ?? clubNames[0], [pick]);
-
-  const beginNewCareer = () => {
-    if (hasExisting) setConfirmOverwrite(true);
-    else setShowPick(true);
-  };
-
-  const openClubPicker = () => {
-    setConfirmOverwrite(false);
-    setShowPick(true);
-  };
-
-  const startCareer = () => {
-    if (!selectedClub) return;
-    newCareer(pick);
+  const resume = () => {
+    const loaded = continueCareer();
+    if (loaded) navigate({ to: '/hub' });
+    else setHasExisting(false);
   };
 
   return (
-    <main className="menu">
-      <h1 className="title">GOAL LEAGUE <span>FC</span></h1>
-      <p className="subtitle">Build your club. Develop the squad. Play the matches. Win the league.</p>
+    <main className="landing-native">
+      <div className="landing-noise" />
+      <section className="landing-copy">
+        <div className="landing-brand" aria-label="Goal League Football Club">
+          <span className="landing-brand-mark">GL</span>
+          <span>GOAL LEAGUE FC</span>
+        </div>
 
-      {!showPick && !confirmOverwrite && (
-        <div className="menu-buttons">
-          <button type="button" className="btn primary" onClick={beginNewCareer}>New Career</button>
-          <button type="button" className="btn" disabled={!hasExisting} onClick={continueCareer}>
-            Continue Career
+        <div className="landing-heading">
+          <h1>BUILD THE CLUB.<br /><strong>CONTROL THE MATCH.</strong></h1>
+          <p>
+            A complete football career built around live matches, tactical decisions,
+            player development and a responsive console-style interface.
+          </p>
+        </div>
+
+        <div className="landing-actions">
+          <button
+            type="button"
+            className="native-cta primary"
+            onClick={() => navigate({ to: '/start-career' })}
+          >
+            <span>Start New Career</span>
+            <b>→</b>
+          </button>
+          <button type="button" className="native-cta" disabled={!hasExisting} onClick={resume}>
+            <span>{hasExisting ? 'Continue Career' : 'No Saved Career'}</span>
+            <b>▶</b>
           </button>
         </div>
-      )}
 
-      {confirmOverwrite && (
-        <section className="panel" role="alertdialog" aria-labelledby="overwrite-title">
-          <h2 id="overwrite-title">Start a new career?</h2>
-          <p>Your current saved career will be replaced when the new career is created.</p>
-          <div className="menu-buttons">
-            <button type="button" className="btn" onClick={() => setConfirmOverwrite(false)}>Cancel</button>
-            <button type="button" className="btn danger" onClick={openClubPicker}>Choose New Club</button>
-          </div>
-        </section>
-      )}
+        <div className="landing-status-row" aria-label="Game features">
+          <div><span>01</span><b>LIVE 3D MATCHES</b><small>Keyboard + touch controls</small></div>
+          <div><span>02</span><b>CAREER SYSTEM</b><small>Squads, training and transfers</small></div>
+          <div><span>03</span><b>LOCAL SAVE</b><small>Fast cached loading</small></div>
+        </div>
+      </section>
 
-      {showPick && (
-        <section className="pick-team" aria-labelledby="choose-club-title">
-          <h2 id="choose-club-title">Choose your club</h2>
-          <div className="team-grid">
-            {clubNames.map((club, index) => (
-              <button
-                type="button"
-                key={`${club.short}-${index}`}
-                className={`team-pick${pick === index ? ' selected' : ''}`}
-                style={{ background: club.color, color: club.color2 }}
-                onClick={() => setPick(index)}
-                aria-pressed={pick === index}
-              >
-                <span className="tp-short">{club.short}</span>
-                <span className="tp-name">{club.name}</span>
-              </button>
-            ))}
-          </div>
-          <div className="menu-buttons">
-            <button type="button" className="btn" onClick={() => setShowPick(false)}>Back</button>
-            <button type="button" className="btn primary" disabled={!selectedClub} onClick={startCareer}>
-              Start with {selectedClub?.short ?? 'Club'}
-            </button>
-          </div>
-        </section>
-      )}
-
-      <p className="hint">
-        A fictional football management and playable-match game. Clubs and players are original fictional creations.
-      </p>
+      <section className="landing-stage" aria-label="Live three-dimensional football preview">
+        <div className="landing-stage-label"><span>LIVE ENGINE</span><b>60 FPS TARGET</b></div>
+        <Suspense fallback={<div className="landing-scene-fallback" />}>
+          <PlayerScene cameraMode="hero" shadows className="landing-scene" cameraPosition={[0, 3.7, 7.4]} fov={42}>
+            <LandingScene3D />
+          </PlayerScene>
+        </Suspense>
+        <div className="landing-stage-caption">
+          <span>PROCEDURAL PLAYERS</span>
+          <strong>REAL-TIME WEBGL</strong>
+        </div>
+      </section>
     </main>
   );
 }
