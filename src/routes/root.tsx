@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { createRootRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
 import { useGame, setNavBridge, type View } from '../store/gameStore';
-import { MatchOverlay } from '../components/MatchOverlay';
+import { BootLoader } from '../components/BootLoader';
 
 const pathToView: Record<string, View> = {
   '/': 'menu',
+  '/start-career': 'menu',
   '/hub': 'hub',
   '/squad': 'squad',
   '/transfers': 'transfers',
@@ -12,9 +13,16 @@ const pathToView: Record<string, View> = {
   '/table': 'table',
 };
 
+function viewFromPath(pathname: string): View | undefined {
+  if (pathname.startsWith('/confirm-match/') || pathname.startsWith('/game/')) return 'match';
+  return pathToView[pathname];
+}
+
 function RootComponent() {
   const navigate = useNavigate();
-  const pathname = useLocation({ select: (l) => l.pathname });
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const view = useGame((state) => state.view);
+  const nextFixture = useGame((state) => state.nextFixture);
 
   useEffect(() => {
     setNavBridge((path: string) => navigate({ to: path }));
@@ -22,20 +30,22 @@ function RootComponent() {
   }, [navigate]);
 
   useEffect(() => {
-    const newView = pathToView[pathname];
-    if (newView) {
-      const current = useGame.getState().view;
-      if (newView !== current) {
-        useGame.getState().syncViewFromRoute(newView);
-      }
-    }
+    const nextView = viewFromPath(pathname);
+    if (!nextView) return;
+    const current = useGame.getState().view;
+    if (nextView !== current) useGame.getState().syncViewFromRoute(nextView);
   }, [pathname]);
 
+  useEffect(() => {
+    const alreadyInMatchFlow = pathname.startsWith('/confirm-match/') || pathname.startsWith('/game/');
+    if (view !== 'match' || alreadyInMatchFlow || !nextFixture) return;
+    navigate({ to: '/confirm-match/$matchId', params: { matchId: nextFixture.id } });
+  }, [navigate, nextFixture, pathname, view]);
+
   return (
-    <>
+    <BootLoader>
       <Outlet />
-      <MatchOverlay />
-    </>
+    </BootLoader>
   );
 }
 
