@@ -69,7 +69,9 @@ function LivePlayer({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const [animation, setAnimation] = useState<AnimTag>('idle');
+  const [isActive, setIsActive] = useState(false);
   const lastAnimation = useRef<AnimTag>('idle');
+  const lastActive = useRef(false);
   const team = entity.side === 'home' ? home : away;
 
   useFrame(() => {
@@ -96,6 +98,12 @@ function LivePlayer({
       lastAnimation.current = nextAnimation;
       setAnimation(nextAnimation);
     }
+
+    const nextActive = internals.activeUserId === entity.id;
+    if (nextActive !== lastActive.current) {
+      lastActive.current = nextActive;
+      setIsActive(nextActive);
+    }
   });
 
   return (
@@ -109,7 +117,7 @@ function LivePlayer({
         isGK={entity.isGk}
         animation={animation}
         skinColor={stableSkin(entity.player.id)}
-        highlight={readEngine(engine).activeUserId === entity.id}
+        highlight={isActive}
       />
     </group>
   );
@@ -183,7 +191,7 @@ function MatchCameraRig({ engine, cameraMode }: { engine: MatchEngine; cameraMod
 
     camera.position.lerp(targetPosition.current, 0.045);
     camera.lookAt(lookAt.current);
-  }, 5);
+  });
 
   return null;
 }
@@ -218,7 +226,6 @@ function Stadium({ graphics }: { graphics: MatchGraphics }) {
           </mesh>
           <spotLight
             position={[0, 2.3, 0]}
-            target-position={[-side * 4.1, -2.5, -end * 4.7]}
             angle={0.52}
             penumbra={0.72}
             intensity={graphics === 'battery' ? 0.7 : 2.2}
