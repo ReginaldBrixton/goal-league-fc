@@ -144,14 +144,14 @@ function LiveBall({ engine }: { engine: MatchEngine }) {
     if (!ball) return;
     const internals = readEngine(engine);
     const target = pitchPosition(internals.ball);
-    ball.position.set(target[0], 0.105, target[2]);
+    ball.position.set(target[0], 0.045, target[2]);
     ball.rotation.x += delta * 4.4;
     ball.rotation.z += delta * 3.1;
   });
 
   return (
     <mesh ref={ballRef} castShadow>
-      <sphereGeometry args={[0.072, 16, 16]} />
+      <sphereGeometry args={[0.032, 14, 14]} />
       <meshStandardMaterial color="#f8fbff" roughness={0.48} metalness={0.04} />
     </mesh>
   );
