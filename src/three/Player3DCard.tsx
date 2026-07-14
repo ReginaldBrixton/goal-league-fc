@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PlayerScene } from './PlayerScene';
 import { PlayerModel } from './PlayerModel';
-import { positionAnimationForPosition, type AnimTag } from './animations';
+import type { AnimTag } from './animations';
 import type { Player, Team } from '../types';
 
 export interface Player3DCardProps {
@@ -20,6 +20,13 @@ const positionColor: Record<Player['position'], string> = {
   DEF: '#1e88e5',
   MID: '#43a047',
   FWD: '#e53935',
+};
+
+const positionAnimation: Record<Player['position'], AnimTag> = {
+  GK: 'gk_catch',
+  DEF: 'tackle',
+  MID: 'pass',
+  FWD: 'shoot',
 };
 
 function formatMoney(value: number): string {
@@ -43,7 +50,7 @@ export function Player3DCard({
   const secondary = team?.color2 ?? neutralSecondary;
   const teamId = team?.id ?? 'free-agent';
 
-  const baseAnim = positionAnimationForPosition(player.position);
+  const baseAnim = positionAnimation[player.position];
   const anim: AnimTag = selected ? 'celebrate' : hovered ? baseAnim : 'idle';
 
   const clickable = Boolean(onClick);
@@ -74,6 +81,7 @@ export function Player3DCard({
               isGK={player.position === 'GK'}
               animation={anim}
               highlight={selected}
+              variant="detail"
             />
           </PlayerScene>
         </div>
@@ -102,7 +110,7 @@ export function Player3DCard({
         </div>
 
         {footer && (
-          <div className="pc3d-footer" onClick={(e) => e.stopPropagation()}>
+          <div className="pc3d-footer" onClick={(event) => event.stopPropagation()}>
             {footer}
           </div>
         )}
