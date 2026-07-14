@@ -66,8 +66,8 @@ export function ConfirmMatchPage({ matchId }: ConfirmMatchPageProps) {
   }
 
   const userIsHome = home.id === userTeam.id;
-  const update = <K extends keyof MatchSettings>(key: K, value: MatchSettings[K]) => {
-    setSettings((current) => ({ ...current, [key]: value }));
+  const update = (key: keyof MatchSettings, value: MatchSettings[keyof MatchSettings]) => {
+    setSettings((current) => ({ ...current, [key]: value } as MatchSettings));
   };
 
   const start = () => {
