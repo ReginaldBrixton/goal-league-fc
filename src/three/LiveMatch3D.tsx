@@ -8,6 +8,7 @@ import {
   type InputState,
   type Vec,
 } from '../engine/matchEngine';
+import { mapScreenInputToPitch, type CameraControlBasis } from '../input/cameraRelativeInput';
 import type { MatchCamera, MatchGraphics } from '../utils/matchSettings';
 import { PlayerScene } from './PlayerScene';
 import { Pitch3D } from './Pitch3D';
@@ -149,12 +150,23 @@ function EngineDriver({
   inputRef,
   paused,
   onFinished,
-}: Pick<LiveMatch3DProps, 'engine' | 'inputRef' | 'paused' | 'onFinished'>) {
+  controlBasisRef,
+}: Pick<LiveMatch3DProps, 'engine' | 'inputRef' | 'paused' | 'onFinished'> & {
+  controlBasisRef: MutableRefObject<CameraControlBasis>;
+}) {
   const completed = useRef(false);
 
   useFrame((_, delta) => {
     if (!paused && !completed.current) {
-      engine.setInput(inputRef.current);
+      const rawInput = inputRef.current;
+      const mapped = mapScreenInputToPitch(rawInput, controlBasisRef.current);
+      engine.setInput({
+        ...rawInput,
+        up: mapped.y < -0.2,
+        down: mapped.y > 0.2,
+        left: mapped.x < -0.2,
+        right: mapped.x > 0.2,
+      });
       engine.update(Math.min(0.05, delta));
     }
 
@@ -167,10 +179,20 @@ function EngineDriver({
   return null;
 }
 
-function MatchCameraRig({ engine, cameraMode }: { engine: MatchEngine; cameraMode: MatchCamera }) {
+function MatchCameraRig({
+  engine,
+  cameraMode,
+  controlBasisRef,
+}: {
+  engine: MatchEngine;
+  cameraMode: MatchCamera;
+  controlBasisRef: MutableRefObject<CameraControlBasis>;
+}) {
   const { camera } = useThree();
   const lookAt = useRef(new THREE.Vector3());
   const targetPosition = useRef(new THREE.Vector3());
+  const cameraRight = useRef(new THREE.Vector3());
+  const cameraUp = useRef(new THREE.Vector3());
 
   useFrame(() => {
     const internals = readEngine(engine);
@@ -191,7 +213,25 @@ function MatchCameraRig({ engine, cameraMode }: { engine: MatchEngine; cameraMod
 
     camera.position.lerp(targetPosition.current, 0.045);
     camera.lookAt(lookAt.current);
-  });
+
+    cameraRight.current.set(1, 0, 0).applyQuaternion(camera.quaternion);
+    cameraUp.current.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    cameraRight.current.y = 0;
+    cameraUp.current.y = 0;
+    if (cameraRight.current.lengthSq() > 0.0001) cameraRight.current.normalize();
+    if (cameraUp.current.lengthSq() > 0.0001) cameraUp.current.normalize();
+
+    controlBasisRef.current = {
+      screenRight: {
+        x: cameraRight.current.z * 10.5,
+        y: cameraRight.current.x * (68 / 6),
+      },
+      screenUp: {
+        x: cameraUp.current.z * 10.5,
+        y: cameraUp.current.x * (68 / 6),
+      },
+    };
+  }, -30);
 
   return null;
 }
@@ -239,12 +279,22 @@ function Stadium({ graphics }: { graphics: MatchGraphics }) {
 
 function LiveScene(props: LiveMatch3DProps) {
   const entities = useMemo(() => readEngine(props.engine).entities, [props.engine]);
+  const controlBasisRef = useRef<CameraControlBasis>({
+    screenRight: { x: 1, y: 0 },
+    screenUp: { x: 0, y: -1 },
+  });
 
   return (
     <>
       <fog attach="fog" args={['#071019', 12, 24]} />
-      <EngineDriver engine={props.engine} inputRef={props.inputRef} paused={props.paused} onFinished={props.onFinished} />
-      <MatchCameraRig engine={props.engine} cameraMode={props.cameraMode} />
+      <EngineDriver
+        engine={props.engine}
+        inputRef={props.inputRef}
+        paused={props.paused}
+        onFinished={props.onFinished}
+        controlBasisRef={controlBasisRef}
+      />
+      <MatchCameraRig engine={props.engine} cameraMode={props.cameraMode} controlBasisRef={controlBasisRef} />
       <Stadium graphics={props.graphics} />
       <Pitch3D width={6} length={10} showBall={false} />
       {entities.map((entity, index) => (
