@@ -5,96 +5,116 @@ export interface Pitch3DProps {
   width?: number;
   length?: number;
   rotateY?: number;
+  showBall?: boolean;
 }
 
 function createLineMaterial(): THREE.LineBasicMaterial {
-  return new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+  return new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.68 });
 }
 
 function makeLine(points: [number, number, number][]): THREE.BufferGeometry {
-  const geo = new THREE.BufferGeometry();
-  const verts = new Float32Array(points.flat());
-  geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-  return geo;
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(points.flat()), 3));
+  return geometry;
 }
 
-export function Pitch3D({ width = 6, length = 10, rotateY = 0 }: Pitch3DProps) {
+export function Pitch3D({ width = 6, length = 10, rotateY = 0, showBall = true }: Pitch3DProps) {
   const grassTexture = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 512;
     canvas.height = 512;
-    const ctx = canvas.getContext('2d')!;
-    const baseGreen = '#2d5a2d';
-    const stripeGreen = '#265226';
-    ctx.fillStyle = baseGreen;
-    ctx.fillRect(0, 0, 512, 512);
-    ctx.fillStyle = stripeGreen;
-    for (let i = 0; i < 512; i += 64) {
-      ctx.fillRect(i, 0, 32, 512);
+    const context = canvas.getContext('2d')!;
+    const gradient = context.createLinearGradient(0, 0, 512, 512);
+    gradient.addColorStop(0, '#28622f');
+    gradient.addColorStop(0.5, '#1f5429');
+    gradient.addColorStop(1, '#173f22');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 512, 512);
+
+    for (let x = 0; x < 512; x += 64) {
+      context.fillStyle = x % 128 === 0 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.04)';
+      context.fillRect(x, 0, 64, 512);
     }
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(3, 5);
-    return tex;
+
+    for (let i = 0; i < 1600; i += 1) {
+      const alpha = 0.015 + Math.random() * 0.035;
+      context.fillStyle = `rgba(220,255,210,${alpha})`;
+      context.fillRect(Math.random() * 512, Math.random() * 512, 1, 4 + Math.random() * 5);
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(3, 5);
+    texture.anisotropy = 8;
+    return texture;
   }, []);
 
-  const lineMat = useMemo(() => createLineMaterial(), []);
-
-  const hw = width / 2;
-  const hl = length / 2;
-  const lineY = 0.02;
+  const lineMaterial = useMemo(() => createLineMaterial(), []);
+  const halfWidth = width / 2;
+  const halfLength = length / 2;
+  const lineY = 0.024;
 
   const lines = useMemo(() => {
-    const geos: THREE.BufferGeometry[] = [];
+    const geometries: THREE.BufferGeometry[] = [];
+    geometries.push(makeLine([[-halfWidth, lineY, -halfLength], [halfWidth, lineY, -halfLength], [halfWidth, lineY, halfLength], [-halfWidth, lineY, halfLength], [-halfWidth, lineY, -halfLength]]));
+    geometries.push(makeLine([[-halfWidth, lineY, 0], [halfWidth, lineY, 0]]));
 
-    geos.push(makeLine([[-hw, lineY, -hl], [hw, lineY, -hl], [hw, lineY, hl], [-hw, lineY, hl], [-hw, lineY, -hl]]));
+    const centreCircle = new THREE.RingGeometry(0.58, 0.61, 48);
+    centreCircle.rotateX(-Math.PI / 2);
+    centreCircle.translate(0, lineY, 0);
+    geometries.push(centreCircle);
 
-    geos.push(makeLine([[-hw, lineY, 0], [hw, lineY, 0]]));
+    const boxWidth = width * 0.61;
+    const boxLength = length * 0.16;
+    geometries.push(makeLine([[-boxWidth / 2, lineY, -halfLength], [boxWidth / 2, lineY, -halfLength], [boxWidth / 2, lineY, -halfLength + boxLength], [-boxWidth / 2, lineY, -halfLength + boxLength], [-boxWidth / 2, lineY, -halfLength]]));
+    geometries.push(makeLine([[boxWidth / 2, lineY, halfLength], [-boxWidth / 2, lineY, halfLength], [-boxWidth / 2, lineY, halfLength - boxLength], [boxWidth / 2, lineY, halfLength - boxLength], [boxWidth / 2, lineY, halfLength]]));
 
-    const centerGeo = new THREE.RingGeometry(0.6, 0.63, 32);
-    centerGeo.rotateX(-Math.PI / 2);
-    centerGeo.translate(0, lineY, 0);
-    geos.push(centerGeo);
-
-    const boxW = width * 0.6;
-    const boxL = 1.2;
-    geos.push(makeLine([[-boxW / 2, lineY, -hl], [boxW / 2, lineY, -hl], [boxW / 2, lineY, -hl + boxL], [-boxW / 2, lineY, -hl + boxL], [-boxW / 2, lineY, -hl]]));
-    geos.push(makeLine([[boxW / 2, lineY, hl], [-boxW / 2, lineY, hl], [-boxW / 2, lineY, hl - boxL], [boxW / 2, lineY, hl - boxL], [boxW / 2, lineY, hl]]));
-
-    const smBoxW = width * 0.3;
-    const smBoxL = 0.5;
-    geos.push(makeLine([[-smBoxW / 2, lineY, -hl], [smBoxW / 2, lineY, -hl], [smBoxW / 2, lineY, -hl + smBoxL], [-smBoxW / 2, lineY, -hl + smBoxL], [-smBoxW / 2, lineY, -hl]]));
-    geos.push(makeLine([[smBoxW / 2, lineY, hl], [-smBoxW / 2, lineY, hl], [-smBoxW / 2, lineY, hl - smBoxL], [smBoxW / 2, lineY, hl - smBoxL], [smBoxW / 2, lineY, hl]]));
-
-    return geos;
-  }, [hw, hl, lineY]);
+    const sixWidth = width * 0.3;
+    const sixLength = length * 0.065;
+    geometries.push(makeLine([[-sixWidth / 2, lineY, -halfLength], [sixWidth / 2, lineY, -halfLength], [sixWidth / 2, lineY, -halfLength + sixLength], [-sixWidth / 2, lineY, -halfLength + sixLength], [-sixWidth / 2, lineY, -halfLength]]));
+    geometries.push(makeLine([[sixWidth / 2, lineY, halfLength], [-sixWidth / 2, lineY, halfLength], [-sixWidth / 2, lineY, halfLength - sixLength], [sixWidth / 2, lineY, halfLength - sixLength], [sixWidth / 2, lineY, halfLength]]));
+    return geometries;
+  }, [halfLength, halfWidth, length, width]);
 
   return (
     <group rotation={[0, rotateY, 0]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[width, length]} />
-        <meshStandardMaterial map={grassTexture} roughness={0.8} />
+        <planeGeometry args={[width, length, 32, 48]} />
+        <meshStandardMaterial map={grassTexture} roughness={0.92} metalness={0.01} />
       </mesh>
 
-      {lines.map((geo, i) => {
-        const lineObj = new THREE.Line(geo, lineMat);
-        return <primitive key={i} object={lineObj} />;
-      })}
+      {lines.map((geometry, index) => (
+        <primitive key={index} object={new THREE.Line(geometry, lineMaterial)} />
+      ))}
 
-      <mesh position={[0, 0.05, -hl - 0.05]}>
-        <boxGeometry args={[width * 0.4, 0.15, 0.08]} />
-        <meshStandardMaterial color="#ffffff" />
-      </mesh>
-      <mesh position={[0, 0.05, hl + 0.05]}>
-        <boxGeometry args={[width * 0.4, 0.15, 0.08]} />
-        <meshStandardMaterial color="#ffffff" />
-      </mesh>
+      {[-1, 1].map((end) => (
+        <group key={end} position={[0, 0, end * (halfLength + 0.2)]} rotation={[0, end === 1 ? Math.PI : 0, 0]}>
+          <mesh position={[0, 0.46, 0]} castShadow>
+            <boxGeometry args={[width * 0.38, 0.06, 0.06]} />
+            <meshStandardMaterial color="#f8fbff" roughness={0.4} />
+          </mesh>
+          <mesh position={[-width * 0.19, 0.23, 0]} castShadow>
+            <boxGeometry args={[0.06, 0.52, 0.06]} />
+            <meshStandardMaterial color="#f8fbff" />
+          </mesh>
+          <mesh position={[width * 0.19, 0.23, 0]} castShadow>
+            <boxGeometry args={[0.06, 0.52, 0.06]} />
+            <meshStandardMaterial color="#f8fbff" />
+          </mesh>
+          <mesh position={[0, 0.23, -0.28]}>
+            <boxGeometry args={[width * 0.38, 0.46, 0.55]} />
+            <meshStandardMaterial color="#dce8ef" wireframe transparent opacity={0.34} />
+          </mesh>
+        </group>
+      ))}
 
-      <mesh position={[0, 0.04, 0]}>
-        <sphereGeometry args={[0.12, 16, 16]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.3} />
-      </mesh>
+      {showBall && (
+        <mesh position={[0, 0.12, 0]} castShadow>
+          <sphereGeometry args={[0.11, 20, 20]} />
+          <meshStandardMaterial color="#ffffff" roughness={0.38} />
+        </mesh>
+      )}
     </group>
   );
 }
