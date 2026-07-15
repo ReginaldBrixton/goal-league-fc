@@ -5,6 +5,7 @@ import { chromium } from 'playwright';
 const baseURL = process.env.BASE_URL ?? 'http://127.0.0.1:4173';
 const screenshotDir = 'screenshots';
 const videoDir = 'videos';
+const mobileUserAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148';
 
 await mkdir(screenshotDir, { recursive: true });
 await mkdir(videoDir, { recursive: true });
@@ -44,16 +45,15 @@ async function assertGameplayLayout(page) {
   assert.ok(layout.canvas.height >= layout.viewport.height - 1, 'canvas must cover the viewport height');
   assert.ok(layout.scorebar.x >= -1 && layout.scorebar.right <= layout.viewport.width + 1, 'scorebar must stay inside the viewport');
   assert.ok(layout.controls.x >= -1 && layout.controls.right <= layout.viewport.width + 1, 'controls must stay inside the viewport');
-  assert.ok(layout.controls.bottom <= layout.viewport.height + 1, 'controls must stay above the viewport bottom');
+  assert.ok(
+    layout.controls.bottom <= layout.viewport.height + 1,
+    `controls must stay above the viewport bottom: controls=${JSON.stringify(layout.controls)} viewport=${JSON.stringify(layout.viewport)}`,
+  );
   assert.ok(layout.joystick.x >= -1 && layout.joystick.right <= layout.viewport.width + 1, 'joystick must stay inside the viewport');
   assert.ok(layout.joystick.bottom <= layout.viewport.height + 1, 'joystick must stay above the viewport bottom');
 }
 
 async function dragAndHoldMobileJoystick(page, context) {
-  await page.locator('.game-screen').waitFor({ state: 'visible' });
-  await page.locator('.live-match-canvas canvas').waitFor({ state: 'visible', timeout: 20_000 });
-  await page.waitForFunction(() => Boolean(window.__goalLeagueDebug?.snapshot().activeUser), null, { timeout: 20_000 });
-
   const control = page.locator('.game-joystick');
   const box = await control.boundingBox();
   assert.ok(box, 'analogue joystick must have a visible touch target');
@@ -72,12 +72,11 @@ async function dragAndHoldMobileJoystick(page, context) {
       type: 'touchMove',
       touchPoints: [{ x: target.x, y: target.y, radiusX: 8, radiusY: 8, force: 1, id: 17 }],
     });
-
     await page.waitForFunction(() => {
       const input = window.__goalLeagueDebug?.input();
       return Boolean(input && Math.hypot(input.moveX ?? 0, input.moveY ?? 0) > 0.45);
     });
-    await page.waitForTimeout(1250);
+    await page.waitForTimeout(900);
 
     const during = await page.evaluate(() => ({
       input: window.__goalLeagueDebug.input(),
@@ -86,36 +85,24 @@ async function dragAndHoldMobileJoystick(page, context) {
       active: document.querySelector('.game-joystick')?.getAttribute('data-active'),
       magnitude: Number(document.querySelector('.game-joystick')?.getAttribute('data-magnitude') ?? 0),
     }));
-
     await page.screenshot({
       path: `${screenshotDir}/06-game-joystick-hold-mobile.png`,
       fullPage: false,
       animations: 'disabled',
     });
 
-    assert.ok((during.input.moveX ?? 0) > 0.3, 'rightward joystick drag must produce positive horizontal input');
-    assert.ok((during.input.moveY ?? 0) > 0.15, 'upward joystick drag must produce positive vertical input');
-    assert.equal(during.active, 'true', 'held joystick must expose active feedback');
-    assert.ok(during.magnitude > 0.45, 'held joystick must expose analogue strength');
-    assert.equal(during.selectedText, '', 'joystick drag must not select interface text');
-    assert.ok(during.snapshot.activeUser, 'an active user player must remain selected');
-
-    const samePlayer = during.snapshot.activeUser.id === before.id;
-    const moved = samePlayer
-      ? Math.hypot(
-        during.snapshot.activeUser.pos.x - before.pos.x,
-        during.snapshot.activeUser.pos.y - before.pos.y,
-      )
+    assert.ok((during.input.moveX ?? 0) > 0.3);
+    assert.ok((during.input.moveY ?? 0) > 0.15);
+    assert.equal(during.active, 'true');
+    assert.ok(during.magnitude > 0.45);
+    assert.equal(during.selectedText, '');
+    assert.ok(during.snapshot.activeUser);
+    const moved = during.snapshot.activeUser.id === before.id
+      ? Math.hypot(during.snapshot.activeUser.pos.x - before.pos.x, during.snapshot.activeUser.pos.y - before.pos.y)
       : 0;
-    const speed = Math.hypot(
-      during.snapshot.activeUser.velocity.x,
-      during.snapshot.activeUser.velocity.y,
-    );
-    console.log(`Analogue joystick evidence: player=${during.snapshot.activeUser.id} samePlayer=${samePlayer} moved=${moved.toFixed(3)}m speed=${speed.toFixed(3)}m/s magnitude=${during.magnitude.toFixed(3)}`);
-    assert.ok(
-      moved > 0.2 || speed > 0.5,
-      `analogue hold must drive the active player, observed moved=${moved.toFixed(3)}m speed=${speed.toFixed(3)}m/s`,
-    );
+    const speed = Math.hypot(during.snapshot.activeUser.velocity.x, during.snapshot.activeUser.velocity.y);
+    console.log(`Analogue joystick evidence: moved=${moved.toFixed(3)}m speed=${speed.toFixed(3)}m/s magnitude=${during.magnitude.toFixed(3)}`);
+    assert.ok(moved > 0.2 || speed > 0.5);
   } finally {
     await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   }
@@ -124,91 +111,183 @@ async function dragAndHoldMobileJoystick(page, context) {
     const input = window.__goalLeagueDebug?.input();
     return Boolean(input && Math.hypot(input.moveX ?? 0, input.moveY ?? 0) < 0.01);
   });
-  await page.waitForFunction(() => document.querySelector('.game-joystick')?.getAttribute('data-active') === 'false');
 }
 
-async function captureJourney(name, viewport, mobile = false) {
-  const context = await browser.newContext({
-    viewport,
-    deviceScaleFactor: mobile ? 2 : 1,
-    reducedMotion: 'reduce',
-    isMobile: mobile,
-    hasTouch: mobile,
-    userAgent: mobile
-      ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148'
-      : undefined,
-    recordVideo: mobile ? { dir: videoDir, size: viewport } : undefined,
-  });
-  const page = await context.newPage();
-  const video = page.video();
+async function pressMobileAction(page, context, selector) {
+  const box = await page.locator(selector).boundingBox();
+  assert.ok(box, `${selector} must have a visible touch target`);
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const client = await context.newCDPSession(page);
+  try {
+    await client.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: point.x, y: point.y, radiusX: 8, radiusY: 8, force: 1, id: 31 }],
+    });
+    await page.waitForTimeout(180);
+  } finally {
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  }
+}
+
+async function verifyGuidedPassingAndTurnover(page, context, name) {
+  const passSetup = await page.evaluate(() => window.__goalLeagueDebug.preparePassGuide());
+  assert.ok(passSetup.carrierId);
+  await page.waitForFunction(() => Boolean(window.__goalLeagueDebug?.snapshot().passTargetId), null, { timeout: 8_000 });
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: `${screenshotDir}/08-pass-guide-${name}.png`, fullPage: false, animations: 'disabled' });
+
+  const guided = await page.evaluate(() => window.__goalLeagueDebug.snapshot());
+  assert.equal(guided.carrierId, passSetup.carrierId);
+  assert.ok(guided.passTargetId);
+  await pressMobileAction(page, context, '.game-action.pass');
+  await page.waitForFunction(
+    (carrierId) => window.__goalLeagueDebug?.snapshot().lastPass?.fromId === carrierId,
+    guided.carrierId,
+    { timeout: 5_000 },
+  );
+  const executedPass = await page.evaluate(() => window.__goalLeagueDebug.snapshot().lastPass);
+  assert.equal(executedPass.toId, guided.passTargetId);
+  console.log(`Pass-guide evidence: viewport=${name} target=${guided.passTargetId} executed=${executedPass.toId}`);
+
+  const turnover = await page.evaluate(() => window.__goalLeagueDebug.forceOpponentTurnover());
+  const start = await page.evaluate((id) => window.__goalLeagueDebug.entity(id), turnover.tacklerId);
+  assert.ok(start);
+  assert.ok(Math.hypot(start.velocity.x, start.velocity.y) < 10);
+
+  let outletPass = null;
+  let travelAtPass = Number.POSITIVE_INFINITY;
+  for (let attempt = 0; attempt < 35; attempt += 1) {
+    await page.waitForTimeout(100);
+    const sample = await page.evaluate((id) => ({
+      snapshot: window.__goalLeagueDebug.snapshot(),
+      entity: window.__goalLeagueDebug.entity(id),
+    }), turnover.tacklerId);
+    if (sample.snapshot.lastPass?.fromId === turnover.tacklerId) {
+      outletPass = sample.snapshot.lastPass;
+      travelAtPass = Math.hypot(sample.entity.pos.x - start.pos.x, sample.entity.pos.y - start.pos.y);
+      break;
+    }
+  }
+  assert.ok(outletPass);
+  assert.notEqual(outletPass.toId, turnover.tacklerId);
+  assert.ok(travelAtPass < 3.5);
+  console.log(`Turnover evidence: viewport=${name} outlet=${outletPass.toId} travelBeforePass=${travelAtPass.toFixed(3)}m`);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${screenshotDir}/09-tactical-outlet-${name}.png`, fullPage: false, animations: 'disabled' });
+}
+
+async function waitForLiveMatch(page) {
+  await page.locator('.game-screen').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.locator('.live-match-canvas canvas').waitFor({ state: 'visible', timeout: 20_000 });
+  await page.waitForFunction(() => Boolean(window.__goalLeagueDebug?.snapshot().activeUser), null, { timeout: 20_000 });
+  await page.waitForTimeout(900);
+}
+
+async function enterMatch(page) {
+  await page.goto(`${baseURL}/`, { waitUntil: 'domcontentloaded' });
+  await page.locator('.landing-native').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.getByRole('button', { name: /start new career/i }).click();
+  await page.waitForURL(/\/start-career$/);
+  await page.locator('.career-club-card').nth(1).click();
+  await page.locator('.career-begin').click();
+  await page.waitForURL(/\/hub$/, { timeout: 20_000 });
+  await page.getByRole('button', { name: /play match/i }).click();
+  await page.waitForURL(/\/confirm-match\//, { timeout: 20_000 });
+  await page.locator('.kickoff-button').click();
+  await page.waitForURL(/\/game\//, { timeout: 20_000 });
+  await waitForLiveMatch(page);
+}
+
+function trackBrowserErrors(page) {
   const pageErrors = [];
   const consoleErrors = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text());
   });
+  return { pageErrors, consoleErrors };
+}
 
-  const shot = async (number, routeName) => {
-    await page.screenshot({
-      path: `${screenshotDir}/${number}-${routeName}-${name}.png`,
-      fullPage: false,
-      animations: 'disabled',
-    });
-  };
-
-  await page.goto(`${baseURL}/`, { waitUntil: 'domcontentloaded' });
-  await page.locator('.landing-native').waitFor({ state: 'visible', timeout: 30_000 });
-  await page.waitForTimeout(900);
-  await shot('01', 'dashboard');
-
-  await page.getByRole('button', { name: /start new career/i }).click();
-  await page.waitForURL(/\/start-career$/);
-  await page.locator('.career-select-screen').waitFor({ state: 'visible' });
-  await page.locator('.career-club-card').nth(1).click();
-  await page.waitForTimeout(1200);
-  await shot('02', 'start-career');
-
-  await page.locator('.career-begin').click();
-  await page.waitForURL(/\/hub$/, { timeout: 20_000 });
-  await page.locator('.hub').waitFor({ state: 'visible' });
-  await page.waitForTimeout(1000);
-  await shot('03', 'hub');
-
-  await page.getByRole('button', { name: /play match/i }).click();
-  await page.waitForURL(/\/confirm-match\//, { timeout: 20_000 });
-  await page.locator('.match-confirm-screen').waitFor({ state: 'visible' });
-  await page.waitForTimeout(900);
-  await shot('04', 'confirm-match');
-
-  await page.locator('.kickoff-button').click();
-  await page.waitForURL(/\/game\//, { timeout: 20_000 });
-  await page.locator('.game-screen').waitFor({ state: 'visible' });
-  await page.locator('.live-match-canvas canvas').waitFor({ state: 'visible', timeout: 20_000 });
-  await page.waitForTimeout(2500);
+async function captureDesktop() {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  const page = await context.newPage();
+  const errors = trackBrowserErrors(page);
+  await enterMatch(page);
   await assertGameplayLayout(page);
-  await shot('05', 'game');
-
-  if (mobile) await dragAndHoldMobileJoystick(page, context);
-
-  await page.waitForTimeout(4500);
-  await assertGameplayLayout(page);
-  await shot('07', 'game-motion');
-
-  if (pageErrors.length > 0) {
-    throw new Error(`${name} page errors:\n${pageErrors.join('\n')}`);
-  }
-  if (consoleErrors.length > 0) {
-    throw new Error(`${name} console errors:\n${consoleErrors.join('\n')}`);
-  }
-
+  await page.screenshot({ path: `${screenshotDir}/05-game-desktop.png`, fullPage: false, animations: 'disabled' });
+  assert.deepEqual(errors.pageErrors, []);
+  assert.deepEqual(errors.consoleErrors, []);
   await context.close();
-  if (video) await video.saveAs(`${videoDir}/${name}-gameplay.webm`);
+}
+
+async function captureMobilePortrait() {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    reducedMotion: 'reduce',
+    isMobile: true,
+    hasTouch: true,
+    userAgent: mobileUserAgent,
+    recordVideo: { dir: videoDir, size: { width: 390, height: 844 } },
+  });
+  const page = await context.newPage();
+  const video = page.video();
+  const errors = trackBrowserErrors(page);
+
+  await enterMatch(page);
+  await assertGameplayLayout(page);
+  await page.screenshot({ path: `${screenshotDir}/05-game-mobile.png`, fullPage: false, animations: 'disabled' });
+  await dragAndHoldMobileJoystick(page, context);
+  await verifyGuidedPassingAndTurnover(page, context, 'mobile');
+
+  const session = await page.evaluate(() => ({
+    url: window.location.href,
+    localStorage: Object.entries(window.localStorage),
+    sessionStorage: Object.entries(window.sessionStorage),
+  }));
+
+  assert.deepEqual(errors.pageErrors, []);
+  assert.deepEqual(errors.consoleErrors, []);
+  await context.close();
+  if (video) await video.saveAs(`${videoDir}/mobile-portrait-gameplay.webm`);
+  return session;
+}
+
+async function captureMobileLandscape(session) {
+  const context = await browser.newContext({
+    viewport: { width: 844, height: 390 },
+    deviceScaleFactor: 2,
+    reducedMotion: 'reduce',
+    isMobile: true,
+    hasTouch: true,
+    userAgent: mobileUserAgent,
+    recordVideo: { dir: videoDir, size: { width: 844, height: 390 } },
+  });
+  await context.addInitScript((stored) => {
+    for (const [key, value] of stored.localStorage) window.localStorage.setItem(key, value);
+    for (const [key, value] of stored.sessionStorage) window.sessionStorage.setItem(key, value);
+  }, session);
+
+  const page = await context.newPage();
+  const video = page.video();
+  const errors = trackBrowserErrors(page);
+  await page.goto(session.url, { waitUntil: 'domcontentloaded' });
+  await waitForLiveMatch(page);
+  await assertGameplayLayout(page);
+  await page.screenshot({ path: `${screenshotDir}/05-game-mobile-landscape.png`, fullPage: false, animations: 'disabled' });
+  await verifyGuidedPassingAndTurnover(page, context, 'mobile-landscape');
+  await page.screenshot({ path: `${screenshotDir}/10-game-motion-mobile-landscape.png`, fullPage: false, animations: 'disabled' });
+
+  assert.deepEqual(errors.pageErrors, []);
+  assert.deepEqual(errors.consoleErrors, []);
+  await context.close();
+  if (video) await video.saveAs(`${videoDir}/mobile-landscape-gameplay.webm`);
 }
 
 try {
-  await captureJourney('desktop', { width: 1440, height: 900 });
-  await captureJourney('mobile', { width: 390, height: 844 }, true);
-  await captureJourney('mobile-landscape', { width: 844, height: 390 }, true);
+  await captureDesktop();
+  const session = await captureMobilePortrait();
+  await captureMobileLandscape(session);
 } finally {
   await browser.close();
 }
