@@ -15,6 +15,10 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function cleanZero(value: number): number {
+  return Math.abs(value) < 0.0000001 ? 0 : value;
+}
+
 /**
  * Converts a pointer displacement into a radial analogue-stick value.
  *
@@ -45,10 +49,10 @@ export function resolveAnalogStick(
     : clamp((clampedMagnitude - safeDeadZone) / (1 - safeDeadZone), 0, 1);
 
   return {
-    x: unitX * adjustedMagnitude,
-    y: -unitY * adjustedMagnitude,
+    x: cleanZero(unitX * adjustedMagnitude),
+    y: cleanZero(-unitY * adjustedMagnitude),
     magnitude: adjustedMagnitude,
-    visualX: unitX * clampedMagnitude,
-    visualY: unitY * clampedMagnitude,
+    visualX: cleanZero(unitX * clampedMagnitude),
+    visualY: cleanZero(unitY * clampedMagnitude),
   };
 }
