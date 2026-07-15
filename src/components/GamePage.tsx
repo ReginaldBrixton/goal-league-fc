@@ -7,6 +7,11 @@ import {
   type InputState,
 } from '../engine/matchEngine';
 import {
+  forceOpponentMidfieldTurnover,
+  getMatchEntityDebugSnapshot,
+  preparePassGuideScenario,
+} from '../engine/matchDebugScenario';
+import {
   createStrategicMatchEngine,
   getMatchDebugSnapshot,
 } from '../engine/strategicMatchEngine';
@@ -190,16 +195,28 @@ export function GamePage({ gameId }: GamePageProps) {
       __goalLeagueDebug?: {
         snapshot: () => ReturnType<typeof getMatchDebugSnapshot>;
         input: () => InputState;
+        entity: (entityId: string) => ReturnType<typeof getMatchEntityDebugSnapshot>;
+        preparePassGuide: () => ReturnType<typeof preparePassGuideScenario>;
+        forceOpponentTurnover: () => ReturnType<typeof forceOpponentMidfieldTurnover>;
       };
     };
     debugWindow.__goalLeagueDebug = {
       snapshot: () => getMatchDebugSnapshot(engine),
       input: () => ({ ...inputRef.current }),
+      entity: (entityId) => getMatchEntityDebugSnapshot(engine, entityId),
+      preparePassGuide: () => {
+        clearInput();
+        return preparePassGuideScenario(engine);
+      },
+      forceOpponentTurnover: () => {
+        clearInput();
+        return forceOpponentMidfieldTurnover(engine);
+      },
     };
     return () => {
       delete debugWindow.__goalLeagueDebug;
     };
-  }, [engine]);
+  }, [clearInput, engine]);
 
   const finishMatch = useCallback((nextResult: MatchResult) => {
     clearInput();
