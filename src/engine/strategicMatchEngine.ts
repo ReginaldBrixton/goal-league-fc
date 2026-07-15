@@ -34,10 +34,25 @@ function normalize(vector: Vec): Vec {
   return { x: vector.x / magnitude, y: vector.y / magnitude };
 }
 
+function rotateDirection(current: Vec, target: Vec, maxRadians: number): Vec {
+  const from = normalize(current);
+  const to = normalize(target);
+  if (Math.hypot(to.x, to.y) < 0.0001) return from;
+  if (Math.hypot(from.x, from.y) < 0.0001) return to;
+
+  const fromAngle = Math.atan2(from.y, from.x);
+  const toAngle = Math.atan2(to.y, to.x);
+  const delta = Math.atan2(Math.sin(toAngle - fromAngle), Math.cos(toAngle - fromAngle));
+  const nextAngle = fromAngle + clamp(delta, -Math.abs(maxRadians), Math.abs(maxRadians));
+  return { x: Math.cos(nextAngle), y: Math.sin(nextAngle) };
+}
+
 interface MatchEngineInternals {
   entities: Entity[];
   ball: Vec;
+  ballVel: Vec;
   carrier: Entity | null;
+  lastTouch: Entity | null;
   activeUserId: string | null;
   input: InputState;
   prevInput: InputState;
@@ -57,11 +72,22 @@ interface MatchEngineInternals {
   tryCapture: (entity: Entity, goalkeeperBonus?: boolean) => void;
 }
 
+interface StrategicPass {
+  fromId: string;
+  toId: string;
+  at: number;
+}
+
 interface StrategicState {
   profile: AIProfile;
   memory: TacticalMemory;
   roles: Map<string, DefensiveRole>;
   sampleClock: number;
+  carrierId: string | null;
+  carrierClock: number;
+  regainCarrierId: string | null;
+  regainClock: number;
+  lastPass: StrategicPass | null;
 }
 
 export interface StrategicMatchOptions {
@@ -73,9 +99,12 @@ export interface StrategicMatchOptions {
 }
 
 export interface MatchDebugSnapshot {
-  activeUser: { id: string; pos: Vec; velocity: Vec } | null;
+  activeUser: { id: string; pos: Vec; velocity: Vec; facing: Vec } | null;
   ball: Vec;
   carrierId: string | null;
+  carrierSide: 'home' | 'away' | null;
+  passTargetId: string | null;
+  lastPass: StrategicPass | null;
   opponentRoles: Record<string, DefensiveRole>;
   tacticalMemory: TacticalMemory;
   aiLevel: AILevel;
@@ -87,6 +116,104 @@ function laneFromY(y: number): 'left' | 'center' | 'right' {
   if (y < PITCH_Y / 3) return 'left';
   if (y > PITCH_Y * 2 / 3) return 'right';
   return 'center';
+}
+
+function passLaneRisk(internal: MatchEngineInternals, from: Vec, to: Vec, side: 'home' | 'away'): number {
+  const line = { x: to.x - from.x, y: to.y - from.y };
+  const lengthSq = line.x * line.x + line.y * line.y || 1;
+  let risk = 0;
+
+  for (const opponent of internal.entities) {
+    if (opponent.side === side) continue;
+    const projection = clamp(
+      ((opponent.pos.x - from.x) * line.x + (opponent.pos.y - from.y) * line.y) / lengthSq,
+      0,
+      1,
+    );
+    const closest = { x: from.x + line.x * projection, y: from.y + line.y * projection };
+    if (distance(opponent.pos, closest) < 2.35) risk += 1;
+  }
+  return risk;
+}
+
+function selectBestPassTarget(
+  internal: MatchEngineInternals,
+  entity: Entity,
+  intent: 'balanced' | 'transition' = 'balanced',
+): Entity | null {
+  const forward = entity.side === 'home' ? 1 : -1;
+  const teammates = internal.entities.filter(
+    (candidate) => candidate.side === entity.side && candidate !== entity && !candidate.isGk,
+  );
+  let best: Entity | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const candidate of teammates) {
+    const passDistance = distance(entity.pos, candidate.pos);
+    if (passDistance < 2.5 || passDistance > 43) continue;
+
+    const forwardProgress = (candidate.pos.x - entity.pos.x) * forward;
+    const nearestOpponent = internal.entities
+      .filter((opponent) => opponent.side !== entity.side)
+      .reduce((nearest, opponent) => Math.min(nearest, distance(opponent.pos, candidate.pos)), 20);
+    const laneRisk = passLaneRisk(internal, entity.pos, candidate.pos, entity.side);
+    const lateralDistance = Math.abs(candidate.pos.y - entity.pos.y);
+    const openness = clamp(nearestOpponent - 2, 0, 8);
+    const backwardPenalty = Math.max(0, -forwardProgress) * (intent === 'transition' ? 0.22 : 0.48);
+    const transitionOutletBonus = intent === 'transition'
+      ? openness * 0.8 + clamp(13 - lateralDistance, 0, 13) * 0.08
+      : 0;
+    const score =
+      forwardProgress * (intent === 'transition' ? 0.9 : 1.15) +
+      openness * 1.15 +
+      transitionOutletBonus -
+      laneRisk * 8.8 -
+      passDistance * 0.055 -
+      lateralDistance * 0.025 -
+      backwardPenalty;
+
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+
+  return best;
+}
+
+function executeStrategicPass(
+  internal: MatchEngineInternals,
+  state: StrategicState,
+  entity: Entity,
+  side: 'home' | 'away',
+  intent: 'balanced' | 'transition' = 'balanced',
+): boolean {
+  const targetEntity = selectBestPassTarget(internal, entity, intent);
+  if (!targetEntity) return false;
+
+  const passing = clamp(entity.player.passing, 20, 99);
+  const error = (100 - passing) / 100;
+  const target = {
+    x: targetEntity.pos.x + targetEntity.vel.x * 0.32 + (internal.rng() - 0.5) * error * 3.4,
+    y: targetEntity.pos.y + targetEntity.vel.y * 0.32 + (internal.rng() - 0.5) * error * 3.4,
+  };
+  const direction = normalize({ x: target.x - entity.pos.x, y: target.y - entity.pos.y });
+  const passDistance = distance(entity.pos, target);
+  const power = clamp(13 + passDistance * 0.35 + passing / 14, 14, 28);
+
+  internal.lastTouch = entity;
+  internal.ball = {
+    x: entity.pos.x + direction.x * 0.8,
+    y: entity.pos.y + direction.y * 0.8,
+  };
+  internal.ballVel = { x: direction.x * power, y: direction.y * power };
+  internal.carrier = null;
+  entity.cooldown = 0.32;
+  state.lastPass = { fromId: entity.id, toId: targetEntity.id, at: internal.elapsed };
+  state.regainCarrierId = null;
+  state.regainClock = 0;
+  void side;
+  return true;
 }
 
 function markTarget(internal: MatchEngineInternals, entity: Entity, laneShift: number): Vec {
@@ -135,7 +262,6 @@ function controlAnalogueUser(
   };
 
   if (movementPlan.strength > 0.02) {
-    entity.facing = { ...movementPlan.direction };
     internal.input.up = movement.y < -0.08;
     internal.input.down = movement.y > 0.08;
     internal.input.left = movement.x < -0.08;
@@ -167,8 +293,6 @@ function controlAnalogueUser(
     dt,
     internal.carrier === entity,
   );
-
-  if (finalPlan.strength > 0.02) entity.facing = { ...finalPlan.direction };
 }
 
 function resolveStablePlayerOverlaps(internal: MatchEngineInternals): void {
@@ -251,6 +375,27 @@ function controlStrategicAI(
     const nearestThreat = internal.entities
       .filter((opponent) => opponent.side !== side)
       .sort((a, b) => distance(a.pos, entity.pos) - distance(b.pos, entity.pos))[0];
+    const inMiddleThird = entity.pos.x > 24 && entity.pos.x < PITCH_X - 24;
+    const freshRegain = state.regainCarrierId === entity.id;
+
+    if (freshRegain && inMiddleThird && state.regainClock < 0.18) {
+      const damping = Math.exp(-8.5 * dt);
+      entity.vel.x *= damping;
+      entity.vel.y *= damping;
+      return;
+    }
+
+    if (
+      freshRegain &&
+      inMiddleThird &&
+      state.regainClock >= 0.18 &&
+      state.regainClock <= 1.35 &&
+      entity.cooldown <= 0 &&
+      executeStrategicPass(internal, state, entity, side, 'transition')
+    ) {
+      return;
+    }
+
     const shootingUtility =
       clamp((32 - goalDistance) / 24, 0, 1) * (entity.player.shooting / 100) * (0.8 + profile.shotPatience * 0.45) -
       pressure * 0.08 +
@@ -264,15 +409,24 @@ function controlStrategicAI(
       internal.doShoot(entity, side);
       return;
     }
-    if (entity.cooldown <= 0 && passingUtility > 0.64) {
-      internal.doPass(entity, side);
+
+    const possessionAge = state.carrierId === entity.id ? state.carrierClock : 0;
+    const shouldRecycle = goalDistance > 27 && possessionAge > 0.85 && passingUtility > 0.38;
+    const mustReleasePressure = pressure > 0 && possessionAge > 0.34;
+    if (
+      entity.cooldown <= 0 &&
+      (passingUtility > 0.64 || shouldRecycle || mustReleasePressure) &&
+      executeStrategicPass(internal, state, entity, side)
+    ) {
       return;
     }
 
     const evadeY = nearestThreat && distance(nearestThreat.pos, entity.pos) < 7
       ? clamp(entity.pos.y + (entity.pos.y - nearestThreat.pos.y) * 1.8, 4, PITCH_Y - 4)
       : clamp(CENTER_Y + (entity.base.y - CENTER_Y) * 0.35, 4, PITCH_Y - 4);
-    internal.moveTo(entity, { x: opponentGoalX, y: evadeY }, speed * (0.9 + profile.compactness * 0.08));
+    const carryDepth = goalDistance > 35 ? 12 : 20;
+    const targetX = clamp(entity.pos.x + forward * carryDepth, 4, PITCH_X - 4);
+    internal.moveTo(entity, { x: targetX, y: evadeY }, speed * (0.82 + profile.compactness * 0.08));
     return;
   }
 
@@ -383,22 +537,84 @@ export function createStrategicMatchEngine(
   const internal = engine as unknown as MatchEngineInternals;
   const originalControlUser = internal.controlUser.bind(engine);
   const originalControlAI = internal.controlAI.bind(engine);
+  const originalStealBall = internal.stealBall.bind(engine);
   const originalUpdate = engine.update.bind(engine);
   const state: StrategicState = {
     profile: getAIProfile(options.aiLevel),
     memory: createTacticalMemory(),
     roles: new Map(),
     sampleClock: 0,
+    carrierId: internal.carrier?.id ?? null,
+    carrierClock: 0,
+    regainCarrierId: null,
+    regainClock: 0,
+    lastPass: null,
   };
   strategicStates.set(engine, state);
 
   internal.controlUser = (entity, dt) => controlAnalogueUser(internal, originalControlUser, entity, dt);
   internal.controlAI = (entity, dt) => controlStrategicAI(internal, state, originalControlAI, entity, dt);
   internal.resolvePlayerOverlaps = () => resolveStablePlayerOverlaps(internal);
+  internal.doPass = (entity, side) => {
+    executeStrategicPass(internal, state, entity, side);
+  };
+  internal.stealBall = (entity, slide) => {
+    const previousCarrier = internal.carrier;
+    originalStealBall(entity, slide);
+    if (internal.carrier !== entity || previousCarrier === entity) return;
+
+    const currentSpeed = Math.hypot(entity.vel.x, entity.vel.y);
+    const settledSpeed = internal.maxSpeed(entity.player) * (slide ? 0.82 : 0.96);
+    if (currentSpeed > settledSpeed) {
+      const direction = normalize(entity.vel);
+      entity.vel = { x: direction.x * settledSpeed, y: direction.y * settledSpeed };
+    }
+    if (slide) entity.sliding = Math.min(entity.sliding, 0.1);
+    entity.cooldown = Math.max(entity.cooldown, 0.18);
+    if (previousCarrier) {
+      previousCarrier.vel.x *= 0.35;
+      previousCarrier.vel.y *= 0.35;
+    }
+
+    if (entity.side !== options.userSide) {
+      state.regainCarrierId = entity.id;
+      state.regainClock = 0;
+    }
+  };
+
+  engine.getUserAim = () => {
+    const user = internal.entities.find((entity) => entity.id === internal.activeUserId);
+    if (!user) return null;
+    const hasBall = internal.carrier === user;
+    const target = hasBall ? selectBestPassTarget(internal, user) : null;
+    return {
+      pos: user.pos,
+      facing: user.facing,
+      hasBall,
+      passTarget: target?.pos ?? null,
+      goalX: user.side === 'home' ? PITCH_X : 0,
+    };
+  };
 
   engine.update = (dt: number) => {
-    state.sampleClock += Math.max(0, dt);
-    const userCarrier = internal.carrier?.side === options.userSide ? internal.carrier : null;
+    const safeDt = clamp(Number.isFinite(dt) ? dt : 0, 0, 0.05);
+    const activeBefore = internal.entities.find((entity) => entity.id === internal.activeUserId);
+    const facingBefore = activeBefore ? { ...activeBefore.facing } : null;
+    const carrierBefore = internal.carrier;
+
+    state.sampleClock += Math.max(0, safeDt);
+    if (carrierBefore?.id === state.carrierId) state.carrierClock += safeDt;
+    else {
+      state.carrierId = carrierBefore?.id ?? null;
+      state.carrierClock = 0;
+    }
+    if (carrierBefore?.id === state.regainCarrierId) state.regainClock += safeDt;
+    else if (state.regainCarrierId) {
+      state.regainCarrierId = null;
+      state.regainClock = 0;
+    }
+
+    const userCarrier = carrierBefore?.side === options.userSide ? carrierBefore : null;
     if (userCarrier && state.sampleClock >= state.profile.reactionSeconds) {
       const passed = internal.input.pass && !internal.prevInput.pass;
       const shot = internal.input.shoot && !internal.prevInput.shoot;
@@ -409,7 +625,40 @@ export function createStrategicMatchEngine(
       );
       state.sampleClock = 0;
     }
+
     originalUpdate(dt);
+
+    const carrierAfter = internal.carrier;
+    if (carrierAfter?.id !== state.carrierId) {
+      state.carrierId = carrierAfter?.id ?? null;
+      state.carrierClock = 0;
+    }
+    if (
+      carrierAfter &&
+      carrierAfter.side !== options.userSide &&
+      carrierAfter.id !== carrierBefore?.id &&
+      carrierBefore?.side === options.userSide
+    ) {
+      state.regainCarrierId = carrierAfter.id;
+      state.regainClock = 0;
+    }
+
+    const activeAfter = internal.entities.find((entity) => entity.id === internal.activeUserId);
+    if (activeAfter && facingBefore) {
+      const movement = {
+        x: clamp(internal.input.moveX ?? 0, -1, 1),
+        y: clamp(internal.input.moveY ?? 0, -1, 1),
+      };
+      const movementStrength = Math.hypot(movement.x, movement.y);
+      const velocityStrength = Math.hypot(activeAfter.vel.x, activeAfter.vel.y);
+      const targetFacing = movementStrength > 0.02
+        ? normalize(movement)
+        : velocityStrength > 0.2
+          ? normalize(activeAfter.vel)
+          : facingBefore;
+      const turnRate = internal.carrier === activeAfter ? 6.4 : 8.8;
+      activeAfter.facing = rotateDirection(facingBefore, targetFacing, turnRate * safeDt);
+    }
   };
 
   return engine;
@@ -422,17 +671,27 @@ export function getMatchDebugSnapshot(engine: MatchEngine): MatchDebugSnapshot {
     memory: createTacticalMemory(),
     roles: new Map<string, DefensiveRole>(),
     sampleClock: 0,
+    carrierId: null,
+    carrierClock: 0,
+    regainCarrierId: null,
+    regainClock: 0,
+    lastPass: null,
   };
   const active = internal.entities.find((entity) => entity.id === internal.activeUserId);
+  const passTarget = active && internal.carrier === active ? selectBestPassTarget(internal, active) : null;
 
   return {
     activeUser: active ? {
       id: active.id,
       pos: { ...active.pos },
       velocity: { ...active.vel },
+      facing: { ...active.facing },
     } : null,
     ball: { ...internal.ball },
     carrierId: internal.carrier?.id ?? null,
+    carrierSide: internal.carrier?.side ?? null,
+    passTargetId: passTarget?.id ?? null,
+    lastPass: state.lastPass ? { ...state.lastPass } : null,
     opponentRoles: Object.fromEntries(state.roles),
     tacticalMemory: {
       ...state.memory,
