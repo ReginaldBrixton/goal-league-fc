@@ -68,7 +68,21 @@ jobs:
           exit 1
 
       - name: Play and capture routed interfaces
-        run: node scripts/capture-pages.mjs
+        run: |
+          set +e
+          node scripts/capture-pages.mjs > /tmp/goal-league-playtest.log 2>&1
+          status=$?
+          cat /tmp/goal-league-playtest.log
+          exit $status
+
+      - name: Upload playtest diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: goal-league-playtest-diagnostics
+          path: /tmp/goal-league-playtest.log
+          if-no-files-found: error
+          retention-days: 2
 
       - name: Upload interface screenshots
         if: always()
