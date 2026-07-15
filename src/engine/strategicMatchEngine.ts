@@ -150,7 +150,8 @@ function selectBestPassTarget(
 
   for (const candidate of teammates) {
     const passDistance = distance(entity.pos, candidate.pos);
-    if (passDistance < 2.5 || passDistance > 43) continue;
+    const maximumDistance = intent === 'transition' ? 43 : 36;
+    if (passDistance < 2.5 || passDistance > maximumDistance) continue;
 
     const forwardProgress = (candidate.pos.x - entity.pos.x) * forward;
     const nearestOpponent = internal.entities
@@ -159,17 +160,22 @@ function selectBestPassTarget(
     const laneRisk = passLaneRisk(internal, entity.pos, candidate.pos, entity.side);
     const lateralDistance = Math.abs(candidate.pos.y - entity.pos.y);
     const openness = clamp(nearestOpponent - 2, 0, 8);
-    const backwardPenalty = Math.max(0, -forwardProgress) * (intent === 'transition' ? 0.22 : 0.48);
+    const preferredDistance = intent === 'transition' ? 16 : 12;
+    const longPassThreshold = intent === 'transition' ? 30 : 22;
+    const distancePenalty =
+      Math.abs(passDistance - preferredDistance) * (intent === 'transition' ? 0.08 : 0.28) +
+      Math.max(0, passDistance - longPassThreshold) * (intent === 'transition' ? 0.12 : 0.5);
+    const backwardPenalty = Math.max(0, -forwardProgress) * (intent === 'transition' ? 0.22 : 0.52);
     const transitionOutletBonus = intent === 'transition'
       ? openness * 0.8 + clamp(13 - lateralDistance, 0, 13) * 0.08
       : 0;
     const score =
-      forwardProgress * (intent === 'transition' ? 0.9 : 1.15) +
-      openness * 1.15 +
+      forwardProgress * (intent === 'transition' ? 0.78 : 0.28) +
+      openness * (intent === 'transition' ? 1.25 : 1.5) +
       transitionOutletBonus -
-      laneRisk * 8.8 -
-      passDistance * 0.055 -
-      lateralDistance * 0.025 -
+      laneRisk * 9.2 -
+      distancePenalty -
+      lateralDistance * 0.02 -
       backwardPenalty;
 
     if (score > bestScore) {
