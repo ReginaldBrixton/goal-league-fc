@@ -188,15 +188,18 @@ test('an opponent winning the ball in midfield settles and releases it instead o
   state.rng = () => 0.99;
   const tacklePosition = { ...tackler.pos };
   let outletPass: ReturnType<typeof getMatchDebugSnapshot>['lastPass'] = null;
+  let turnoverTravel = Number.POSITIVE_INFINITY;
 
   engine.setInput(emptyInput());
   for (let frame = 0; frame < 96; frame += 1) {
     engine.update(1 / 60);
     const pass = getMatchDebugSnapshot(engine).lastPass;
-    if (!outletPass && pass?.fromId === tackler.id && pass.toId !== tackler.id) outletPass = pass;
+    if (!outletPass && pass?.fromId === tackler.id && pass.toId !== tackler.id) {
+      outletPass = pass;
+      turnoverTravel = Math.hypot(tackler.pos.x - tacklePosition.x, tackler.pos.y - tacklePosition.y);
+    }
   }
 
-  const travelled = Math.hypot(tackler.pos.x - tacklePosition.x, tackler.pos.y - tacklePosition.y);
   assert.ok(outletPass, 'the tackle winner never released the ball to a different teammate');
-  assert.ok(travelled < 10, `the tackle winner glided ${travelled.toFixed(2)}m immediately after the turnover`);
+  assert.ok(turnoverTravel < 3.5, `the tackle winner glided ${turnoverTravel.toFixed(2)}m before making the outlet pass`);
 });
