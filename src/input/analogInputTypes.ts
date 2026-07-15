@@ -13,6 +13,6 @@ declare module '../engine/matchEngine' {
 }
 
 export type AnalogInputState = InputState & {
-  moveX: number;
-  moveY: number;
+  moveX?: number;
+  moveY?: number;
 };
