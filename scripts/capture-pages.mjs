@@ -5,6 +5,7 @@ import { chromium } from 'playwright';
 const baseURL = process.env.BASE_URL ?? 'http://127.0.0.1:4173';
 const screenshotDir = 'screenshots';
 const videoDir = 'videos';
+const mobileUserAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148';
 
 await mkdir(screenshotDir, { recursive: true });
 await mkdir(videoDir, { recursive: true });
@@ -44,7 +45,10 @@ async function assertGameplayLayout(page) {
   assert.ok(layout.canvas.height >= layout.viewport.height - 1, 'canvas must cover the viewport height');
   assert.ok(layout.scorebar.x >= -1 && layout.scorebar.right <= layout.viewport.width + 1, 'scorebar must stay inside the viewport');
   assert.ok(layout.controls.x >= -1 && layout.controls.right <= layout.viewport.width + 1, 'controls must stay inside the viewport');
-  assert.ok(layout.controls.bottom <= layout.viewport.height + 1, 'controls must stay above the viewport bottom');
+  assert.ok(
+    layout.controls.bottom <= layout.viewport.height + 1,
+    `controls must stay above the viewport bottom: controls=${JSON.stringify(layout.controls)} viewport=${JSON.stringify(layout.viewport)}`,
+  );
   assert.ok(layout.joystick.x >= -1 && layout.joystick.right <= layout.viewport.width + 1, 'joystick must stay inside the viewport');
   assert.ok(layout.joystick.bottom <= layout.viewport.height + 1, 'joystick must stay above the viewport bottom');
 }
@@ -172,6 +176,13 @@ async function verifyGuidedPassingAndTurnover(page, context, name) {
   await page.screenshot({ path: `${screenshotDir}/09-tactical-outlet-${name}.png`, fullPage: false, animations: 'disabled' });
 }
 
+async function waitForLiveMatch(page) {
+  await page.locator('.game-screen').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.locator('.live-match-canvas canvas').waitFor({ state: 'visible', timeout: 20_000 });
+  await page.waitForFunction(() => Boolean(window.__goalLeagueDebug?.snapshot().activeUser), null, { timeout: 20_000 });
+  await page.waitForTimeout(900);
+}
+
 async function enterMatch(page) {
   await page.goto(`${baseURL}/`, { waitUntil: 'domcontentloaded' });
   await page.locator('.landing-native').waitFor({ state: 'visible', timeout: 30_000 });
@@ -184,39 +195,44 @@ async function enterMatch(page) {
   await page.waitForURL(/\/confirm-match\//, { timeout: 20_000 });
   await page.locator('.kickoff-button').click();
   await page.waitForURL(/\/game\//, { timeout: 20_000 });
-  await page.locator('.live-match-canvas canvas').waitFor({ state: 'visible', timeout: 20_000 });
-  await page.waitForFunction(() => Boolean(window.__goalLeagueDebug?.snapshot().activeUser), null, { timeout: 20_000 });
-  await page.waitForTimeout(900);
+  await waitForLiveMatch(page);
+}
+
+function trackBrowserErrors(page) {
+  const pageErrors = [];
+  const consoleErrors = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  return { pageErrors, consoleErrors };
 }
 
 async function captureDesktop() {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
   const page = await context.newPage();
-  const errors = [];
-  page.on('pageerror', (error) => errors.push(error.message));
+  const errors = trackBrowserErrors(page);
   await enterMatch(page);
   await assertGameplayLayout(page);
   await page.screenshot({ path: `${screenshotDir}/05-game-desktop.png`, fullPage: false, animations: 'disabled' });
-  assert.deepEqual(errors, []);
+  assert.deepEqual(errors.pageErrors, []);
+  assert.deepEqual(errors.consoleErrors, []);
   await context.close();
 }
 
-async function captureMobile() {
+async function captureMobilePortrait() {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 2,
     reducedMotion: 'reduce',
     isMobile: true,
     hasTouch: true,
-    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
+    userAgent: mobileUserAgent,
     recordVideo: { dir: videoDir, size: { width: 390, height: 844 } },
   });
   const page = await context.newPage();
   const video = page.video();
-  const errors = [];
-  const consoleErrors = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+  const errors = trackBrowserErrors(page);
 
   await enterMatch(page);
   await assertGameplayLayout(page);
@@ -224,33 +240,54 @@ async function captureMobile() {
   await dragAndHoldMobileJoystick(page, context);
   await verifyGuidedPassingAndTurnover(page, context, 'mobile');
 
-  const rotation = await context.newCDPSession(page);
-  await rotation.send('Emulation.setDeviceMetricsOverride', {
-    width: 844,
-    height: 390,
+  const session = await page.evaluate(() => ({
+    url: window.location.href,
+    localStorage: Object.entries(window.localStorage),
+    sessionStorage: Object.entries(window.sessionStorage),
+  }));
+
+  assert.deepEqual(errors.pageErrors, []);
+  assert.deepEqual(errors.consoleErrors, []);
+  await context.close();
+  if (video) await video.saveAs(`${videoDir}/mobile-portrait-gameplay.webm`);
+  return session;
+}
+
+async function captureMobileLandscape(session) {
+  const context = await browser.newContext({
+    viewport: { width: 844, height: 390 },
     deviceScaleFactor: 2,
-    mobile: true,
-    screenWidth: 844,
-    screenHeight: 390,
-    positionX: 0,
-    positionY: 0,
-    dontSetVisibleSize: false,
+    reducedMotion: 'reduce',
+    isMobile: true,
+    hasTouch: true,
+    userAgent: mobileUserAgent,
+    recordVideo: { dir: videoDir, size: { width: 844, height: 390 } },
   });
-  await page.evaluate(() => window.dispatchEvent(new Event('resize')));
-  await page.waitForTimeout(650);
+  await context.addInitScript((stored) => {
+    for (const [key, value] of stored.localStorage) window.localStorage.setItem(key, value);
+    for (const [key, value] of stored.sessionStorage) window.sessionStorage.setItem(key, value);
+  }, session);
+
+  const page = await context.newPage();
+  const video = page.video();
+  const errors = trackBrowserErrors(page);
+  await page.goto(session.url, { waitUntil: 'domcontentloaded' });
+  await waitForLiveMatch(page);
   await assertGameplayLayout(page);
+  await page.screenshot({ path: `${screenshotDir}/05-game-mobile-landscape.png`, fullPage: false, animations: 'disabled' });
   await verifyGuidedPassingAndTurnover(page, context, 'mobile-landscape');
   await page.screenshot({ path: `${screenshotDir}/10-game-motion-mobile-landscape.png`, fullPage: false, animations: 'disabled' });
 
-  assert.deepEqual(errors, []);
-  assert.deepEqual(consoleErrors, []);
+  assert.deepEqual(errors.pageErrors, []);
+  assert.deepEqual(errors.consoleErrors, []);
   await context.close();
-  if (video) await video.saveAs(`${videoDir}/mobile-rotated-gameplay.webm`);
+  if (video) await video.saveAs(`${videoDir}/mobile-landscape-gameplay.webm`);
 }
 
 try {
   await captureDesktop();
-  await captureMobile();
+  const session = await captureMobilePortrait();
+  await captureMobileLandscape(session);
 } finally {
   await browser.close();
 }
