@@ -224,7 +224,19 @@ async function captureMobile() {
   await dragAndHoldMobileJoystick(page, context);
   await verifyGuidedPassingAndTurnover(page, context, 'mobile');
 
-  await page.setViewportSize({ width: 844, height: 390 });
+  const rotation = await context.newCDPSession(page);
+  await rotation.send('Emulation.setDeviceMetricsOverride', {
+    width: 844,
+    height: 390,
+    deviceScaleFactor: 2,
+    mobile: true,
+    screenWidth: 844,
+    screenHeight: 390,
+    positionX: 0,
+    positionY: 0,
+    dontSetVisibleSize: false,
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event('resize')));
   await page.waitForTimeout(650);
   await assertGameplayLayout(page);
   await verifyGuidedPassingAndTurnover(page, context, 'mobile-landscape');
