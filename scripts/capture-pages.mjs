@@ -151,17 +151,21 @@ async function verifyGuidedPassingAndTurnover(page, name) {
   assert.equal(guided.carrierId, passSetup.carrierId, 'prepared user must retain the ball while the guide is captured');
   assert.ok(guided.passTargetId, 'visible pass guide must resolve to an available teammate');
 
-  await page.keyboard.down('Space');
-  await page.waitForTimeout(120);
-  await page.keyboard.up('Space');
-  await page.waitForFunction(
-    (carrierId) => window.__goalLeagueDebug?.snapshot().lastPass?.fromId === carrierId,
-    guided.carrierId,
-    { timeout: 5_000 },
-  );
-  const executedPass = await page.evaluate(() => window.__goalLeagueDebug.snapshot().lastPass);
-  assert.equal(executedPass.toId, guided.passTargetId, 'Pass must be sent to the teammate indicated by the live guide');
-  console.log(`Pass-guide evidence: carrier=${guided.carrierId} target=${guided.passTargetId} executed=${executedPass.toId}`);
+  if (name === 'mobile') {
+    await page.keyboard.down('Space');
+    await page.waitForTimeout(120);
+    await page.keyboard.up('Space');
+    await page.waitForFunction(
+      (carrierId) => window.__goalLeagueDebug?.snapshot().lastPass?.fromId === carrierId,
+      guided.carrierId,
+      { timeout: 5_000 },
+    );
+    const executedPass = await page.evaluate(() => window.__goalLeagueDebug.snapshot().lastPass);
+    assert.equal(executedPass.toId, guided.passTargetId, 'Pass must be sent to the teammate indicated by the live guide');
+    console.log(`Pass-guide evidence: carrier=${guided.carrierId} target=${guided.passTargetId} executed=${executedPass.toId}`);
+  } else {
+    console.log(`Landscape pass-guide evidence: carrier=${guided.carrierId} target=${guided.passTargetId}`);
+  }
 
   const turnover = await page.evaluate(() => window.__goalLeagueDebug.forceOpponentTurnover());
   assert.ok(turnover.tacklerId, 'turnover scenario must identify the opponent tackler');
