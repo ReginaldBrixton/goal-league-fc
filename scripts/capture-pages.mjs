@@ -135,13 +135,12 @@ async function verifyGuidedPassingAndTurnover(page, name) {
 
   const passSetup = await page.evaluate(() => window.__goalLeagueDebug.preparePassGuide());
   assert.ok(passSetup.carrierId, 'pass-guide scenario must create a user carrier');
-  assert.ok(passSetup.targetId, 'pass-guide scenario must create an available teammate');
   await page.waitForFunction(
-    (targetId) => window.__goalLeagueDebug?.snapshot().passTargetId === targetId,
-    passSetup.targetId,
+    () => Boolean(window.__goalLeagueDebug?.snapshot().passTargetId),
+    null,
     { timeout: 8_000 },
   );
-  await page.waitForTimeout(450);
+  await page.waitForTimeout(250);
   await page.screenshot({
     path: `${screenshotDir}/08-pass-guide-${name}.png`,
     fullPage: false,
@@ -150,7 +149,19 @@ async function verifyGuidedPassingAndTurnover(page, name) {
 
   const guided = await page.evaluate(() => window.__goalLeagueDebug.snapshot());
   assert.equal(guided.carrierId, passSetup.carrierId, 'prepared user must retain the ball while the guide is captured');
-  assert.equal(guided.passTargetId, passSetup.targetId, 'visible pass guide must resolve to the prepared receiver');
+  assert.ok(guided.passTargetId, 'visible pass guide must resolve to an available teammate');
+
+  await page.keyboard.down('Space');
+  await page.waitForTimeout(120);
+  await page.keyboard.up('Space');
+  await page.waitForFunction(
+    (carrierId) => window.__goalLeagueDebug?.snapshot().lastPass?.fromId === carrierId,
+    guided.carrierId,
+    { timeout: 5_000 },
+  );
+  const executedPass = await page.evaluate(() => window.__goalLeagueDebug.snapshot().lastPass);
+  assert.equal(executedPass.toId, guided.passTargetId, 'Pass must be sent to the teammate indicated by the live guide');
+  console.log(`Pass-guide evidence: carrier=${guided.carrierId} target=${guided.passTargetId} executed=${executedPass.toId}`);
 
   const turnover = await page.evaluate(() => window.__goalLeagueDebug.forceOpponentTurnover());
   assert.ok(turnover.tacklerId, 'turnover scenario must identify the opponent tackler');
