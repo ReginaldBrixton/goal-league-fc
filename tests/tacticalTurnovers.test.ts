@@ -58,6 +58,18 @@ function squad(teamId: string): Player[] {
   }));
 }
 
+function createEngine(seed: number): MatchEngine {
+  return createStrategicMatchEngine(
+    home,
+    away,
+    squad(home.id),
+    squad(away.id),
+    { formation: '4-3-3', userSide: 'home', realSecondsPerMatchHalf: 45, aiLevel: 'professional' },
+    {},
+    seed,
+  );
+}
+
 function emptyInput(): InputState {
   return {
     up: false,
@@ -87,15 +99,7 @@ function unit(vector: Vec): Vec {
 }
 
 test('a successful sliding tackle cannot carry slide velocity into possession', () => {
-  const engine = new MatchEngine(
-    home,
-    away,
-    squad(home.id),
-    squad(away.id),
-    { formation: '4-3-3', userSide: 'home', realSecondsPerMatchHalf: 45 },
-    {},
-    7,
-  );
+  const engine = createEngine(7);
   const state = internals(engine);
   const dispossessed = state.entities.find((entity) => entity.side === 'home' && !entity.isGk)!;
   const tackler = state.entities.find((entity) => entity.side === 'away' && !entity.isGk)!;
@@ -115,15 +119,7 @@ test('a successful sliding tackle cannot carry slide velocity into possession', 
 });
 
 test('the displayed user pass target is the same teammate the pass is sent toward', () => {
-  const engine = new MatchEngine(
-    home,
-    away,
-    squad(home.id),
-    squad(away.id),
-    { formation: '4-3-3', userSide: 'home', realSecondsPerMatchHalf: 45 },
-    {},
-    11,
-  );
+  const engine = createEngine(11);
   const state = internals(engine);
   const carrier = state.entities.find((entity) => entity.id === 'home-home-p6')!;
   const central = state.entities.find((entity) => entity.id === 'home-home-p9')!;
@@ -152,15 +148,7 @@ test('the displayed user pass target is the same teammate the pass is sent towar
 });
 
 test('analogue direction changes rotate the controlled player progressively instead of snapping', () => {
-  const engine = createStrategicMatchEngine(
-    home,
-    away,
-    squad(home.id),
-    squad(away.id),
-    { formation: '4-3-3', userSide: 'home', realSecondsPerMatchHalf: 45, aiLevel: 'professional' },
-    {},
-    19,
-  );
+  const engine = createEngine(19);
   const state = internals(engine);
   const active = state.entities.find((entity) => entity.id === state.activeUserId)!;
   state.carrier = active;
@@ -178,15 +166,7 @@ test('analogue direction changes rotate the controlled player progressively inst
 });
 
 test('an opponent winning the ball in midfield settles and releases it instead of gliding straight to goal', () => {
-  const engine = createStrategicMatchEngine(
-    home,
-    away,
-    squad(home.id),
-    squad(away.id),
-    { formation: '4-3-3', userSide: 'home', realSecondsPerMatchHalf: 45, aiLevel: 'professional' },
-    {},
-    23,
-  );
+  const engine = createEngine(23);
   const state = internals(engine);
   const dispossessed = state.entities.find((entity) => entity.side === 'home' && !entity.isGk)!;
   const tackler = state.entities.find((entity) => entity.id === 'away-away-p2')!;
