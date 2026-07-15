@@ -7,9 +7,8 @@ import {
   type MutableRefObject,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import type { InputState } from '../engine/matchEngine';
 import { resolveAnalogStick, type AnalogStickVector } from './analogJoystickMath';
-import './analogInputTypes';
+import type { AnalogInputState } from './analogInputTypes';
 
 const RESTING_STICK: AnalogStickVector = {
   x: 0,
@@ -20,7 +19,7 @@ const RESTING_STICK: AnalogStickVector = {
 };
 
 interface AnalogJoystickProps {
-  inputRef: MutableRefObject<InputState>;
+  inputRef: MutableRefObject<AnalogInputState>;
   disabled?: boolean;
 }
 
