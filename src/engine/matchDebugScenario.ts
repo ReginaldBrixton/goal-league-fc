@@ -66,10 +66,17 @@ export function preparePassGuideScenario(engine: MatchEngine): { carrierId: stri
   place(primaryTarget, { x: 52.5 + forward * 16, y: 46 });
   if (secondaryTarget) place(secondaryTarget, { x: 52.5 + forward * 10, y: 19 });
 
-  const blockers = internal.entities.filter((entity) => entity.side === opponentSide && !entity.isGk).slice(0, 3);
-  if (blockers[0]) place(blockers[0], { x: 52.5 + forward * 6, y: 34 });
-  if (blockers[1]) place(blockers[1], { x: 52.5 + forward * 10, y: 34 });
-  if (blockers[2]) place(blockers[2], { x: 52.5 + forward * 5, y: 28 });
+  const opponentForward = forwardFor(opponentSide);
+  const defensiveX = opponentSide === 'home' ? 16 : 89;
+  internal.entities
+    .filter((entity) => entity.side === opponentSide && !entity.isGk)
+    .forEach((entity, index) => {
+      place(entity, {
+        x: clamp(defensiveX + opponentForward * (index % 3), 8, 97),
+        y: 7 + (index % 8) * 7.5,
+      });
+      entity.facing = { x: opponentForward, y: 0 };
+    });
 
   internal.carrier = carrier;
   internal.lastTouch = carrier;
