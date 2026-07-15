@@ -15,6 +15,7 @@ import { Pitch3D } from './Pitch3D';
 import { PlayerModel } from './PlayerModel';
 import type { AnimTag } from './animations';
 import { getMatchCameraPose } from './matchCamera';
+import { buildPitchGuide, dampAngle } from './matchGuides';
 import {
   isCompactMatchViewport,
   LIVE_PLAYER_SCALE,
@@ -85,20 +86,23 @@ function LivePlayer({
   const lastActive = useRef(false);
   const team = entity.side === 'home' ? home : away;
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     const group = groupRef.current;
     if (!group) return;
 
     const target = pitchPosition(entity.pos);
     group.position.set(target[0], target[1], target[2]);
     const speed = Math.hypot(entity.vel.x, entity.vel.y);
-    if (speed > 0.05) {
-      group.rotation.y = Math.atan2(entity.vel.x, entity.vel.y);
-    } else {
-      group.rotation.y = Math.atan2(entity.facing.x, entity.facing.y);
-    }
-
     const internals = readEngine(engine);
+    const nextActive = internals.activeUserId === entity.id;
+    const direction = nextActive
+      ? entity.facing
+      : speed > 0.05
+        ? entity.vel
+        : entity.facing;
+    const targetAngle = Math.atan2(direction.x, direction.y);
+    group.rotation.y = dampAngle(group.rotation.y, targetAngle, nextActive ? 14 : 18, delta);
+
     let nextAnimation: AnimTag = 'idle';
     if (entity.sliding > 0) nextAnimation = 'tackle';
     else if (internals.carrier === entity) nextAnimation = speed > 0.8 ? 'dribble' : 'idle';
@@ -110,7 +114,6 @@ function LivePlayer({
       setAnimation(nextAnimation);
     }
 
-    const nextActive = internals.activeUserId === entity.id;
     if (nextActive !== lastActive.current) {
       lastActive.current = nextActive;
       setIsActive(nextActive);
@@ -154,6 +157,101 @@ function LiveBall({ engine }: { engine: MatchEngine }) {
       <sphereGeometry args={[0.032, 14, 14]} />
       <meshStandardMaterial color="#f8fbff" roughness={0.48} metalness={0.04} />
     </mesh>
+  );
+}
+
+function LiveUserGuides({ engine }: { engine: MatchEngine }) {
+  const passLineRef = useRef<THREE.Mesh>(null);
+  const passHeadRef = useRef<THREE.Mesh>(null);
+  const receiverRef = useRef<THREE.Group>(null);
+  const facingLineRef = useRef<THREE.Mesh>(null);
+  const facingHeadRef = useRef<THREE.Mesh>(null);
+  const upAxis = useRef(new THREE.Vector3(0, 1, 0));
+  const direction = useRef(new THREE.Vector3());
+
+  useFrame(({ clock }) => {
+    const passLine = passLineRef.current;
+    const passHead = passHeadRef.current;
+    const receiver = receiverRef.current;
+    const facingLine = facingLineRef.current;
+    const facingHead = facingHeadRef.current;
+    if (!passLine || !passHead || !receiver || !facingLine || !facingHead) return;
+
+    const aim = engine.getUserAim();
+    const showGuides = Boolean(aim?.hasBall);
+    facingLine.visible = showGuides;
+    facingHead.visible = showGuides;
+    passLine.visible = Boolean(showGuides && aim?.passTarget);
+    passHead.visible = Boolean(showGuides && aim?.passTarget);
+    receiver.visible = Boolean(showGuides && aim?.passTarget);
+    if (!aim || !showGuides) return;
+
+    const facingTarget = {
+      x: aim.pos.x + aim.facing.x * 8.5,
+      y: aim.pos.y + aim.facing.y * 8.5,
+    };
+    const facingGuide = buildPitchGuide(aim.pos, facingTarget, 0.085);
+    facingLine.position.set(facingGuide.midpoint.x, facingGuide.midpoint.y, facingGuide.midpoint.z);
+    facingLine.rotation.set(0, facingGuide.rotationY, 0);
+    facingLine.scale.set(1, 1, Math.max(0.01, facingGuide.length));
+    facingHead.position.set(facingGuide.end.x, facingGuide.end.y + 0.005, facingGuide.end.z);
+    direction.current
+      .set(
+        facingGuide.end.x - facingGuide.start.x,
+        facingGuide.end.y - facingGuide.start.y,
+        facingGuide.end.z - facingGuide.start.z,
+      )
+      .normalize();
+    facingHead.quaternion.setFromUnitVectors(upAxis.current, direction.current);
+
+    if (!aim.passTarget) return;
+    const passGuide = buildPitchGuide(aim.pos, aim.passTarget, 0.073);
+    passLine.position.set(passGuide.midpoint.x, passGuide.midpoint.y, passGuide.midpoint.z);
+    passLine.rotation.set(0, passGuide.rotationY, 0);
+    passLine.scale.set(1, 1, Math.max(0.01, passGuide.length));
+    passHead.position.set(passGuide.end.x, passGuide.end.y + 0.006, passGuide.end.z);
+    direction.current
+      .set(
+        passGuide.end.x - passGuide.start.x,
+        passGuide.end.y - passGuide.start.y,
+        passGuide.end.z - passGuide.start.z,
+      )
+      .normalize();
+    passHead.quaternion.setFromUnitVectors(upAxis.current, direction.current);
+    receiver.position.set(passGuide.end.x, passGuide.end.y, passGuide.end.z);
+    const pulse = 1 + Math.sin(clock.elapsedTime * 6) * 0.12;
+    receiver.scale.setScalar(pulse);
+  });
+
+  return (
+    <group>
+      <mesh ref={passLineRef} visible={false} renderOrder={8}>
+        <boxGeometry args={[0.035, 0.012, 1]} />
+        <meshBasicMaterial color="#5dff9c" transparent opacity={0.78} depthWrite={false} />
+      </mesh>
+      <mesh ref={passHeadRef} visible={false} renderOrder={9}>
+        <coneGeometry args={[0.09, 0.22, 12]} />
+        <meshBasicMaterial color="#d7ff3f" transparent opacity={0.95} depthWrite={false} />
+      </mesh>
+      <group ref={receiverRef} visible={false}>
+        <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={9}>
+          <torusGeometry args={[0.17, 0.025, 10, 28]} />
+          <meshBasicMaterial color="#d7ff3f" transparent opacity={0.92} depthWrite={false} />
+        </mesh>
+        <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={9}>
+          <ringGeometry args={[0.035, 0.09, 20]} />
+          <meshBasicMaterial color="#5dff9c" transparent opacity={0.74} depthWrite={false} side={THREE.DoubleSide} />
+        </mesh>
+      </group>
+      <mesh ref={facingLineRef} visible={false} renderOrder={7}>
+        <boxGeometry args={[0.026, 0.01, 1]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.58} depthWrite={false} />
+      </mesh>
+      <mesh ref={facingHeadRef} visible={false} renderOrder={8}>
+        <coneGeometry args={[0.065, 0.17, 10]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.82} depthWrite={false} />
+      </mesh>
+    </group>
   );
 }
 
@@ -311,6 +409,7 @@ function LiveScene(props: LiveMatch3DProps) {
       <MatchCameraRig engine={props.engine} cameraMode={props.cameraMode} controlBasisRef={controlBasisRef} />
       <Stadium graphics={props.graphics} compact={compact} />
       <Pitch3D width={6} length={10} showBall={false} />
+      <LiveUserGuides engine={props.engine} />
       {entities.map((entity, index) => (
         <LivePlayer
           key={entity.id}
