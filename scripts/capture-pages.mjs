@@ -127,7 +127,24 @@ async function dragAndHoldMobileJoystick(page, context) {
   await page.waitForFunction(() => document.querySelector('.game-joystick')?.getAttribute('data-active') === 'false');
 }
 
-async function verifyGuidedPassingAndTurnover(page, name) {
+async function pressMobileAction(page, context, selector) {
+  const button = page.locator(selector);
+  const box = await button.boundingBox();
+  assert.ok(box, `${selector} must have a visible touch target`);
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const client = await context.newCDPSession(page);
+  try {
+    await client.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: point.x, y: point.y, radiusX: 8, radiusY: 8, force: 1, id: 31 }],
+    });
+    await page.waitForTimeout(180);
+  } finally {
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  }
+}
+
+async function verifyGuidedPassingAndTurnover(page, context, name) {
   await page.waitForFunction(() => {
     const debug = window.__goalLeagueDebug;
     return Boolean(debug?.preparePassGuide && debug?.forceOpponentTurnover && debug?.entity);
@@ -151,21 +168,15 @@ async function verifyGuidedPassingAndTurnover(page, name) {
   assert.equal(guided.carrierId, passSetup.carrierId, 'prepared user must retain the ball while the guide is captured');
   assert.ok(guided.passTargetId, 'visible pass guide must resolve to an available teammate');
 
-  if (name === 'mobile') {
-    await page.keyboard.down('Space');
-    await page.waitForTimeout(120);
-    await page.keyboard.up('Space');
-    await page.waitForFunction(
-      (carrierId) => window.__goalLeagueDebug?.snapshot().lastPass?.fromId === carrierId,
-      guided.carrierId,
-      { timeout: 5_000 },
-    );
-    const executedPass = await page.evaluate(() => window.__goalLeagueDebug.snapshot().lastPass);
-    assert.equal(executedPass.toId, guided.passTargetId, 'Pass must be sent to the teammate indicated by the live guide');
-    console.log(`Pass-guide evidence: carrier=${guided.carrierId} target=${guided.passTargetId} executed=${executedPass.toId}`);
-  } else {
-    console.log(`Landscape pass-guide evidence: carrier=${guided.carrierId} target=${guided.passTargetId}`);
-  }
+  await pressMobileAction(page, context, '.game-action.pass');
+  await page.waitForFunction(
+    (carrierId) => window.__goalLeagueDebug?.snapshot().lastPass?.fromId === carrierId,
+    guided.carrierId,
+    { timeout: 5_000 },
+  );
+  const executedPass = await page.evaluate(() => window.__goalLeagueDebug.snapshot().lastPass);
+  assert.equal(executedPass.toId, guided.passTargetId, 'Pass must be sent to the teammate indicated by the live guide');
+  console.log(`Pass-guide evidence: viewport=${name} carrier=${guided.carrierId} target=${guided.passTargetId} executed=${executedPass.toId}`);
 
   const turnover = await page.evaluate(() => window.__goalLeagueDebug.forceOpponentTurnover());
   assert.ok(turnover.tacklerId, 'turnover scenario must identify the opponent tackler');
@@ -194,7 +205,7 @@ async function verifyGuidedPassingAndTurnover(page, name) {
   assert.ok(outletPass, 'opponent tackle winner must make a tactical outlet pass');
   assert.notEqual(outletPass.toId, turnover.tacklerId, 'outlet pass must go to another opponent');
   assert.ok(travelAtPass < 3.5, `opponent travelled ${travelAtPass.toFixed(2)}m before releasing the ball`);
-  console.log(`Turnover evidence: tackler=${turnover.tacklerId} outlet=${outletPass.toId} travelBeforePass=${travelAtPass.toFixed(3)}m`);
+  console.log(`Turnover evidence: viewport=${name} tackler=${turnover.tacklerId} outlet=${outletPass.toId} travelBeforePass=${travelAtPass.toFixed(3)}m`);
 
   await page.waitForTimeout(450);
   await page.screenshot({
@@ -267,7 +278,7 @@ async function captureJourney(name, viewport, mobile = false) {
 
   if (mobile) {
     await dragAndHoldMobileJoystick(page, context);
-    await verifyGuidedPassingAndTurnover(page, name);
+    await verifyGuidedPassingAndTurnover(page, context, name);
   }
 
   await page.waitForTimeout(2500);
