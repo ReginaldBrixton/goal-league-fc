@@ -174,6 +174,8 @@ function EngineDriver({
       const mapped = mapScreenInputToPitch(rawInput, controlBasisRef.current);
       engine.setInput({
         ...rawInput,
+        moveX: mapped.x,
+        moveY: mapped.y,
         up: mapped.y < -0.2,
         down: mapped.y > 0.2,
         left: mapped.x < -0.2,
@@ -281,7 +283,7 @@ function Stadium({ graphics, compact }: { graphics: MatchGraphics; compact: bool
             color="#e9f7ff"
           />
         </group>
-      )))}
+      ))) }
     </group>
   );
 }

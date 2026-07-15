@@ -11,6 +11,7 @@ import {
   getMatchDebugSnapshot,
 } from '../engine/strategicMatchEngine';
 import type { MatchResult, Player } from '../types';
+import { AnalogJoystick } from '../input/AnalogJoystick';
 import { usePressControls } from '../input/usePressControls';
 import { LiveMatch3D } from '../three/LiveMatch3D';
 import { readMatchSettings } from '../utils/matchSettings';
@@ -20,7 +21,15 @@ interface GamePageProps {
   gameId: string;
 }
 
-type InputAction = keyof InputState;
+type KeyboardAction =
+  | 'up'
+  | 'down'
+  | 'left'
+  | 'right'
+  | 'pass'
+  | 'shoot'
+  | 'switchPlayer'
+  | 'slide';
 
 const emptyInput = (): InputState => ({
   up: false,
@@ -31,9 +40,11 @@ const emptyInput = (): InputState => ({
   shoot: false,
   switchPlayer: false,
   slide: false,
+  moveX: 0,
+  moveY: 0,
 });
 
-function keyboardAction(code: string): InputAction | null {
+function keyboardAction(code: string): KeyboardAction | null {
   switch (code) {
     case 'ArrowUp':
     case 'KeyW': return 'up';
@@ -68,15 +79,6 @@ function adjustDifficulty(players: Player[], amount: number): Player[] {
     shooting: clampRating(player.shooting + amount),
     defending: clampRating(player.defending + amount),
   }));
-}
-
-function ArrowIcon({ direction }: { direction: 'up' | 'down' | 'left' | 'right' }) {
-  const rotations = { up: 0, right: 90, down: 180, left: 270 } as const;
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" style={{ transform: `rotate(${rotations[direction]}deg)` }}>
-      <path d="M12 4 4.5 13h4.7v7h5.6v-7h4.7L12 4Z" />
-    </svg>
-  );
 }
 
 export function GamePage({ gameId }: GamePageProps) {
@@ -229,6 +231,7 @@ export function GamePage({ gameId }: GamePageProps) {
 
   const possession = Math.round((hud?.possessionHome ?? 0.5) * 100);
   const activeName = hud?.activePlayerName ?? 'Selecting player';
+  const controlsDisabled = paused || Boolean(result);
 
   return (
     <main className="game-screen" onContextMenu={(event) => event.preventDefault()}>
@@ -236,7 +239,7 @@ export function GamePage({ gameId }: GamePageProps) {
         <LiveMatch3D
           engine={engine}
           inputRef={inputRef}
-          paused={paused || Boolean(result)}
+          paused={controlsDisabled}
           cameraMode={settings.camera}
           graphics={settings.graphics}
           home={home}
@@ -275,22 +278,7 @@ export function GamePage({ gameId }: GamePageProps) {
       <button type="button" className="game-pause-button" onClick={togglePause} aria-label="Pause match">Ⅱ</button>
 
       <div className="game-touch-controls" aria-label="On-screen football controls" onContextMenu={(event) => event.preventDefault()}>
-        <div className="game-stick" role="group" aria-label="Movement controls">
-          {(['up', 'left', 'down', 'right'] as const).map((direction) => (
-            <button
-              type="button"
-              key={direction}
-              className={`stick-${direction}${pressedActions.has(direction) ? ' is-pressed' : ''}`}
-              aria-label={`Move ${direction}`}
-              aria-pressed={pressedActions.has(direction)}
-              data-pressed={pressedActions.has(direction) ? 'true' : 'false'}
-              {...bindPress(direction)}
-            >
-              <ArrowIcon direction={direction} />
-            </button>
-          ))}
-          <i aria-hidden="true" />
-        </div>
+        <AnalogJoystick inputRef={inputRef} disabled={controlsDisabled} />
         <div className="game-action-buttons">
           {([
             ['shoot', 'A', 'SHOOT'],

@@ -1,5 +1,7 @@
+import '../input/analogInputTypes';
 import type { FormationKey, MatchResult, Player, Team } from '../types';
 import { MatchEngine, type Entity, type HudState, type InputState, type Vec } from './matchEngine';
+import { integrateControlledVelocity, resolveControlledMovement } from './playerMovement';
 import {
   assignDefensiveRoles,
   createTacticalMemory,
@@ -16,6 +18,7 @@ const PITCH_X = 105;
 const PITCH_Y = 68;
 const CENTER_Y = PITCH_Y / 2;
 const BALL_CAPTURE_RADIUS = 1.55;
+const PLAYER_COLLISION_DISTANCE = 1.18;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -35,13 +38,16 @@ interface MatchEngineInternals {
   entities: Entity[];
   ball: Vec;
   carrier: Entity | null;
+  activeUserId: string | null;
   input: InputState;
   prevInput: InputState;
   elapsed: number;
   opt: { userSide: 'home' | 'away' };
   rng: () => number;
+  controlUser: (entity: Entity, dt: number) => void;
   controlAI: (entity: Entity, dt: number) => void;
   controlGoalkeeper: (entity: Entity, dt: number) => void;
+  resolvePlayerOverlaps: () => void;
   moveTo: (entity: Entity, target: Vec, speed: number) => void;
   maxSpeed: (player: Player) => number;
   chancePerSecond: (rate: number, dt: number) => boolean;
@@ -97,6 +103,116 @@ function markTarget(internal: MatchEngineInternals, entity: Entity, laneShift: n
     x: clamp(mark.pos.x - forward * 2.8, 3, PITCH_X - 3),
     y: clamp(mark.pos.y * 0.55 + shapeY * 0.45, 4, PITCH_Y - 4),
   };
+}
+
+function controlAnalogueUser(
+  internal: MatchEngineInternals,
+  originalControlUser: (entity: Entity, dt: number) => void,
+  entity: Entity,
+  dt: number,
+): void {
+  const hasAnalogueAxes = Number.isFinite(internal.input.moveX) && Number.isFinite(internal.input.moveY);
+  if (!hasAnalogueAxes) {
+    originalControlUser(entity, dt);
+    return;
+  }
+
+  const movement = {
+    x: clamp(internal.input.moveX ?? 0, -1, 1),
+    y: clamp(internal.input.moveY ?? 0, -1, 1),
+  };
+  const movementPlan = resolveControlledMovement(
+    movement,
+    internal.maxSpeed(entity.player),
+    internal.carrier === entity,
+  );
+  const velocityBeforeActions = { ...entity.vel };
+  const savedDirections = {
+    up: internal.input.up,
+    down: internal.input.down,
+    left: internal.input.left,
+    right: internal.input.right,
+  };
+
+  if (movementPlan.strength > 0.02) {
+    entity.facing = { ...movementPlan.direction };
+    internal.input.up = movement.y < -0.08;
+    internal.input.down = movement.y > 0.08;
+    internal.input.left = movement.x < -0.08;
+    internal.input.right = movement.x > 0.08;
+  } else {
+    internal.input.up = false;
+    internal.input.down = false;
+    internal.input.left = false;
+    internal.input.right = false;
+  }
+
+  originalControlUser(entity, dt);
+
+  internal.input.up = savedDirections.up;
+  internal.input.down = savedDirections.down;
+  internal.input.left = savedDirections.left;
+  internal.input.right = savedDirections.right;
+
+  if (entity.sliding > 0) return;
+
+  const finalPlan = resolveControlledMovement(
+    movement,
+    internal.maxSpeed(entity.player),
+    internal.carrier === entity,
+  );
+  entity.vel = integrateControlledVelocity(
+    velocityBeforeActions,
+    finalPlan.targetVelocity,
+    dt,
+    internal.carrier === entity,
+  );
+
+  if (finalPlan.strength > 0.02) entity.facing = { ...finalPlan.direction };
+}
+
+function resolveStablePlayerOverlaps(internal: MatchEngineInternals): void {
+  for (let pass = 0; pass < 2; pass += 1) {
+    for (let i = 0; i < internal.entities.length; i += 1) {
+      for (let j = i + 1; j < internal.entities.length; j += 1) {
+        const a = internal.entities[i];
+        const b = internal.entities[j];
+        const delta = { x: b.pos.x - a.pos.x, y: b.pos.y - a.pos.y };
+        let separation = Math.hypot(delta.x, delta.y);
+        let direction: Vec;
+
+        if (separation < 0.001) {
+          direction = (i + j) % 2 === 0 ? { x: 1, y: 0 } : { x: 0, y: 1 };
+          separation = 0.001;
+        } else {
+          direction = { x: delta.x / separation, y: delta.y / separation };
+        }
+
+        if (separation >= PLAYER_COLLISION_DISTANCE) continue;
+
+        const overlap = PLAYER_COLLISION_DISTANCE - separation;
+        const correction = Math.min(overlap, 0.22);
+        const aIsActive = a.id === internal.activeUserId;
+        const bIsActive = b.id === internal.activeUserId;
+        const aWeight = aIsActive ? 0.32 : bIsActive ? 0.68 : 0.5;
+        const bWeight = 1 - aWeight;
+
+        a.pos.x = clamp(a.pos.x - direction.x * correction * aWeight, 0.5, PITCH_X - 0.5);
+        a.pos.y = clamp(a.pos.y - direction.y * correction * aWeight, 0.5, PITCH_Y - 0.5);
+        b.pos.x = clamp(b.pos.x + direction.x * correction * bWeight, 0.5, PITCH_X - 0.5);
+        b.pos.y = clamp(b.pos.y + direction.y * correction * bWeight, 0.5, PITCH_Y - 0.5);
+
+        const closingVelocity = (b.vel.x - a.vel.x) * direction.x + (b.vel.y - a.vel.y) * direction.y;
+        if (closingVelocity < 0) {
+          const impulse = -closingVelocity * 0.28;
+          a.vel.x -= direction.x * impulse * aWeight;
+          a.vel.y -= direction.y * impulse * aWeight;
+          b.vel.x += direction.x * impulse * bWeight;
+          b.vel.y += direction.y * impulse * bWeight;
+        }
+      }
+    }
+  }
 }
 
 function controlStrategicAI(
@@ -265,6 +381,7 @@ export function createStrategicMatchEngine(
 ): MatchEngine {
   const engine = new MatchEngine(home, away, homeXI, awayXI, options, hooks, seed);
   const internal = engine as unknown as MatchEngineInternals;
+  const originalControlUser = internal.controlUser.bind(engine);
   const originalControlAI = internal.controlAI.bind(engine);
   const originalUpdate = engine.update.bind(engine);
   const state: StrategicState = {
@@ -275,7 +392,9 @@ export function createStrategicMatchEngine(
   };
   strategicStates.set(engine, state);
 
+  internal.controlUser = (entity, dt) => controlAnalogueUser(internal, originalControlUser, entity, dt);
   internal.controlAI = (entity, dt) => controlStrategicAI(internal, state, originalControlAI, entity, dt);
+  internal.resolvePlayerOverlaps = () => resolveStablePlayerOverlaps(internal);
 
   engine.update = (dt: number) => {
     state.sampleClock += Math.max(0, dt);
@@ -304,7 +423,7 @@ export function getMatchDebugSnapshot(engine: MatchEngine): MatchDebugSnapshot {
     roles: new Map<string, DefensiveRole>(),
     sampleClock: 0,
   };
-  const active = internal.entities.find((entity) => entity.id === (engine as unknown as { activeUserId: string | null }).activeUserId);
+  const active = internal.entities.find((entity) => entity.id === internal.activeUserId);
 
   return {
     activeUser: active ? {

@@ -1,8 +1,13 @@
-import type { InputState, Vec } from '../engine/matchEngine';
+import type { Vec } from '../engine/matchEngine';
+import type { AnalogInputState } from './analogInputTypes';
 
 export interface CameraControlBasis {
   screenRight: Vec;
   screenUp: Vec;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function normalize(vector: Vec): Vec {
@@ -11,13 +16,24 @@ function normalize(vector: Vec): Vec {
   return { x: vector.x / magnitude, y: vector.y / magnitude };
 }
 
-export function mapScreenInputToPitch(input: InputState, basis: CameraControlBasis): Vec {
-  const horizontal = Number(input.right) - Number(input.left);
-  const vertical = Number(input.up) - Number(input.down);
-  if (horizontal === 0 && vertical === 0) return { x: 0, y: 0 };
+export function mapScreenInputToPitch(input: AnalogInputState, basis: CameraControlBasis): Vec {
+  const analogueX = typeof input.moveX === 'number' && Number.isFinite(input.moveX) ? input.moveX : 0;
+  const analogueY = typeof input.moveY === 'number' && Number.isFinite(input.moveY) ? input.moveY : 0;
+  const digitalX = Number(input.right) - Number(input.left);
+  const digitalY = Number(input.up) - Number(input.down);
+  const horizontal = clamp(analogueX + digitalX, -1, 1);
+  const vertical = clamp(analogueY + digitalY, -1, 1);
+  const inputMagnitude = Math.min(1, Math.hypot(horizontal, vertical));
 
-  return normalize({
+  if (inputMagnitude < 0.0001) return { x: 0, y: 0 };
+
+  const direction = normalize({
     x: basis.screenRight.x * horizontal + basis.screenUp.x * vertical,
     y: basis.screenRight.y * horizontal + basis.screenUp.y * vertical,
   });
+
+  return {
+    x: direction.x * inputMagnitude,
+    y: direction.y * inputMagnitude,
+  };
 }
