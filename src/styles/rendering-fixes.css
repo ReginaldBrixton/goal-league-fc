@@ -1,6 +1,9 @@
 /* Final visual stability layer for gameplay and player presentation. */
 
-.game-screen,
+.game-screen {
+  min-height: 100dvh;
+}
+
 .career-select-screen,
 .match-confirm-screen,
 .landing-native {
@@ -17,7 +20,7 @@
 
 @media (max-width: 600px) {
   .game-screen {
-    height: 100svh;
+    height: 100dvh;
   }
 
   .game-scorebar {
