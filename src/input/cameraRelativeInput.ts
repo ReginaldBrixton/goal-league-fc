@@ -17,8 +17,8 @@ function normalize(vector: Vec): Vec {
 }
 
 export function mapScreenInputToPitch(input: AnalogInputState, basis: CameraControlBasis): Vec {
-  const analogueX = Number.isFinite(input.moveX) ? input.moveX : 0;
-  const analogueY = Number.isFinite(input.moveY) ? input.moveY : 0;
+  const analogueX = typeof input.moveX === 'number' && Number.isFinite(input.moveX) ? input.moveX : 0;
+  const analogueY = typeof input.moveY === 'number' && Number.isFinite(input.moveY) ? input.moveY : 0;
   const digitalX = Number(input.right) - Number(input.left);
   const digitalY = Number(input.up) - Number(input.down);
   const horizontal = clamp(analogueX + digitalX, -1, 1);
