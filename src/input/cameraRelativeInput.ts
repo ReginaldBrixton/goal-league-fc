@@ -1,3 +1,4 @@
+import './analogInputTypes';
 import type { InputState, Vec } from '../engine/matchEngine';
 
 export interface CameraControlBasis {
@@ -16,8 +17,8 @@ function normalize(vector: Vec): Vec {
 }
 
 export function mapScreenInputToPitch(input: InputState, basis: CameraControlBasis): Vec {
-  const analogueX = Number.isFinite(input.moveX) ? input.moveX : 0;
-  const analogueY = Number.isFinite(input.moveY) ? input.moveY : 0;
+  const analogueX = Number.isFinite(input.moveX) ? input.moveX ?? 0 : 0;
+  const analogueY = Number.isFinite(input.moveY) ? input.moveY ?? 0 : 0;
   const digitalX = Number(input.right) - Number(input.left);
   const digitalY = Number(input.up) - Number(input.down);
   const horizontal = clamp(analogueX + digitalX, -1, 1);
