@@ -32,56 +32,72 @@ async function assertGameplayLayout(page) {
       canvas: rect('.live-match-canvas canvas'),
       scorebar: rect('.game-scorebar'),
       controls: rect('.game-touch-controls'),
+      joystick: rect('.game-joystick'),
     };
   });
 
   assert.ok(layout.canvas, 'live canvas must exist');
   assert.ok(layout.scorebar, 'scorebar must exist');
   assert.ok(layout.controls, 'touch controls must exist');
+  assert.ok(layout.joystick, 'analogue joystick must exist');
   assert.ok(layout.canvas.width >= layout.viewport.width - 1, 'canvas must cover the viewport width');
   assert.ok(layout.canvas.height >= layout.viewport.height - 1, 'canvas must cover the viewport height');
   assert.ok(layout.scorebar.x >= -1 && layout.scorebar.right <= layout.viewport.width + 1, 'scorebar must stay inside the viewport');
   assert.ok(layout.controls.x >= -1 && layout.controls.right <= layout.viewport.width + 1, 'controls must stay inside the viewport');
   assert.ok(layout.controls.bottom <= layout.viewport.height + 1, 'controls must stay above the viewport bottom');
+  assert.ok(layout.joystick.x >= -1 && layout.joystick.right <= layout.viewport.width + 1, 'joystick must stay inside the viewport');
+  assert.ok(layout.joystick.bottom <= layout.viewport.height + 1, 'joystick must stay above the viewport bottom');
 }
 
-async function pressAndHoldMobileControl(page, context) {
+async function dragAndHoldMobileJoystick(page, context) {
   await page.locator('.game-screen').waitFor({ state: 'visible' });
   await page.locator('.live-match-canvas canvas').waitFor({ state: 'visible', timeout: 20_000 });
   await page.waitForFunction(() => Boolean(window.__goalLeagueDebug?.snapshot().activeUser), null, { timeout: 20_000 });
 
-  const control = page.getByRole('button', { name: 'Move right' });
+  const control = page.locator('.game-joystick');
   const box = await control.boundingBox();
-  assert.ok(box, 'Move-right control must have a visible touch target');
-  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  assert.ok(box, 'analogue joystick must have a visible touch target');
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const target = { x: centre.x + box.width * 0.31, y: centre.y - box.height * 0.2 };
   const client = await context.newCDPSession(page);
   const before = await page.evaluate(() => window.__goalLeagueDebug.snapshot().activeUser);
-  assert.ok(before, 'an active user player must be available before the hold');
+  assert.ok(before, 'an active user player must be available before the joystick drag');
 
   try {
     await client.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
-      touchPoints: [{ x: point.x, y: point.y, radiusX: 8, radiusY: 8, force: 1, id: 17 }],
+      touchPoints: [{ x: centre.x, y: centre.y, radiusX: 8, radiusY: 8, force: 1, id: 17 }],
     });
-    await page.waitForFunction(() => window.__goalLeagueDebug.input().right === true);
+    await client.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: target.x, y: target.y, radiusX: 8, radiusY: 8, force: 1, id: 17 }],
+    });
+
+    await page.waitForFunction(() => {
+      const input = window.__goalLeagueDebug?.input();
+      return Boolean(input && Math.hypot(input.moveX ?? 0, input.moveY ?? 0) > 0.45);
+    });
     await page.waitForTimeout(1250);
 
     const during = await page.evaluate(() => ({
       input: window.__goalLeagueDebug.input(),
       snapshot: window.__goalLeagueDebug.snapshot(),
       selectedText: window.getSelection()?.toString() ?? '',
-      pressed: document.querySelector('[aria-label="Move right"]')?.getAttribute('data-pressed'),
+      active: document.querySelector('.game-joystick')?.getAttribute('data-active'),
+      magnitude: Number(document.querySelector('.game-joystick')?.getAttribute('data-magnitude') ?? 0),
     }));
 
     await page.screenshot({
-      path: `${screenshotDir}/06-game-control-hold-mobile.png`,
+      path: `${screenshotDir}/06-game-joystick-hold-mobile.png`,
       fullPage: false,
       animations: 'disabled',
     });
 
-    assert.equal(during.input.right, true, 'held pointer must keep movement active');
-    assert.equal(during.pressed, 'true', 'held control must show pressed feedback');
-    assert.equal(during.selectedText, '', 'long press must not select interface text');
+    assert.ok((during.input.moveX ?? 0) > 0.3, 'rightward joystick drag must produce positive horizontal input');
+    assert.ok((during.input.moveY ?? 0) > 0.15, 'upward joystick drag must produce positive vertical input');
+    assert.equal(during.active, 'true', 'held joystick must expose active feedback');
+    assert.ok(during.magnitude > 0.45, 'held joystick must expose analogue strength');
+    assert.equal(during.selectedText, '', 'joystick drag must not select interface text');
     assert.ok(during.snapshot.activeUser, 'an active user player must remain selected');
 
     const samePlayer = during.snapshot.activeUser.id === before.id;
@@ -95,16 +111,20 @@ async function pressAndHoldMobileControl(page, context) {
       during.snapshot.activeUser.velocity.x,
       during.snapshot.activeUser.velocity.y,
     );
-    console.log(`Mobile hold evidence: player=${during.snapshot.activeUser.id} samePlayer=${samePlayer} moved=${moved.toFixed(3)}m speed=${speed.toFixed(3)}m/s`);
+    console.log(`Analogue joystick evidence: player=${during.snapshot.activeUser.id} samePlayer=${samePlayer} moved=${moved.toFixed(3)}m speed=${speed.toFixed(3)}m/s magnitude=${during.magnitude.toFixed(3)}`);
     assert.ok(
       moved > 0.2 || speed > 0.5,
-      `held movement must drive the active player, observed moved=${moved.toFixed(3)}m speed=${speed.toFixed(3)}m/s`,
+      `analogue hold must drive the active player, observed moved=${moved.toFixed(3)}m speed=${speed.toFixed(3)}m/s`,
     );
   } finally {
     await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   }
 
-  await page.waitForFunction(() => window.__goalLeagueDebug.input().right === false);
+  await page.waitForFunction(() => {
+    const input = window.__goalLeagueDebug?.input();
+    return Boolean(input && Math.hypot(input.moveX ?? 0, input.moveY ?? 0) < 0.01);
+  });
+  await page.waitForFunction(() => document.querySelector('.game-joystick')?.getAttribute('data-active') === 'false');
 }
 
 async function captureJourney(name, viewport, mobile = false) {
@@ -168,7 +188,7 @@ async function captureJourney(name, viewport, mobile = false) {
   await assertGameplayLayout(page);
   await shot('05', 'game');
 
-  if (mobile) await pressAndHoldMobileControl(page, context);
+  if (mobile) await dragAndHoldMobileJoystick(page, context);
 
   await page.waitForTimeout(4500);
   await assertGameplayLayout(page);
