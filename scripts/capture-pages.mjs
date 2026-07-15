@@ -127,6 +127,68 @@ async function dragAndHoldMobileJoystick(page, context) {
   await page.waitForFunction(() => document.querySelector('.game-joystick')?.getAttribute('data-active') === 'false');
 }
 
+async function verifyGuidedPassingAndTurnover(page, name) {
+  await page.waitForFunction(() => {
+    const debug = window.__goalLeagueDebug;
+    return Boolean(debug?.preparePassGuide && debug?.forceOpponentTurnover && debug?.entity);
+  }, null, { timeout: 15_000 });
+
+  const passSetup = await page.evaluate(() => window.__goalLeagueDebug.preparePassGuide());
+  assert.ok(passSetup.carrierId, 'pass-guide scenario must create a user carrier');
+  assert.ok(passSetup.targetId, 'pass-guide scenario must create an available teammate');
+  await page.waitForFunction(
+    (targetId) => window.__goalLeagueDebug?.snapshot().passTargetId === targetId,
+    passSetup.targetId,
+    { timeout: 8_000 },
+  );
+  await page.waitForTimeout(450);
+  await page.screenshot({
+    path: `${screenshotDir}/08-pass-guide-${name}.png`,
+    fullPage: false,
+    animations: 'disabled',
+  });
+
+  const guided = await page.evaluate(() => window.__goalLeagueDebug.snapshot());
+  assert.equal(guided.carrierId, passSetup.carrierId, 'prepared user must retain the ball while the guide is captured');
+  assert.equal(guided.passTargetId, passSetup.targetId, 'visible pass guide must resolve to the prepared receiver');
+
+  const turnover = await page.evaluate(() => window.__goalLeagueDebug.forceOpponentTurnover());
+  assert.ok(turnover.tacklerId, 'turnover scenario must identify the opponent tackler');
+  const start = await page.evaluate((id) => window.__goalLeagueDebug.entity(id), turnover.tacklerId);
+  assert.ok(start, 'opponent tackler must remain inspectable after the challenge');
+  assert.ok(
+    Math.hypot(start.velocity.x, start.velocity.y) < 10,
+    `tackle winner must settle below glide speed, observed ${Math.hypot(start.velocity.x, start.velocity.y).toFixed(2)}m/s`,
+  );
+
+  let outletPass = null;
+  let travelAtPass = Number.POSITIVE_INFINITY;
+  for (let attempt = 0; attempt < 35; attempt += 1) {
+    await page.waitForTimeout(100);
+    const sample = await page.evaluate((id) => ({
+      snapshot: window.__goalLeagueDebug.snapshot(),
+      entity: window.__goalLeagueDebug.entity(id),
+    }), turnover.tacklerId);
+    if (sample.snapshot.lastPass?.fromId === turnover.tacklerId) {
+      outletPass = sample.snapshot.lastPass;
+      travelAtPass = Math.hypot(sample.entity.pos.x - start.pos.x, sample.entity.pos.y - start.pos.y);
+      break;
+    }
+  }
+
+  assert.ok(outletPass, 'opponent tackle winner must make a tactical outlet pass');
+  assert.notEqual(outletPass.toId, turnover.tacklerId, 'outlet pass must go to another opponent');
+  assert.ok(travelAtPass < 3.5, `opponent travelled ${travelAtPass.toFixed(2)}m before releasing the ball`);
+  console.log(`Turnover evidence: tackler=${turnover.tacklerId} outlet=${outletPass.toId} travelBeforePass=${travelAtPass.toFixed(3)}m`);
+
+  await page.waitForTimeout(450);
+  await page.screenshot({
+    path: `${screenshotDir}/09-tactical-outlet-${name}.png`,
+    fullPage: false,
+    animations: 'disabled',
+  });
+}
+
 async function captureJourney(name, viewport, mobile = false) {
   const context = await browser.newContext({
     viewport,
@@ -188,11 +250,14 @@ async function captureJourney(name, viewport, mobile = false) {
   await assertGameplayLayout(page);
   await shot('05', 'game');
 
-  if (mobile) await dragAndHoldMobileJoystick(page, context);
+  if (mobile) {
+    await dragAndHoldMobileJoystick(page, context);
+    await verifyGuidedPassingAndTurnover(page, name);
+  }
 
-  await page.waitForTimeout(4500);
+  await page.waitForTimeout(2500);
   await assertGameplayLayout(page);
-  await shot('07', 'game-motion');
+  await shot('10', 'game-motion');
 
   if (pageErrors.length > 0) {
     throw new Error(`${name} page errors:\n${pageErrors.join('\n')}`);
