@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MatchEngine, type Entity, type InputState, type Vec } from '../src/engine/matchEngine';
-import { createStrategicMatchEngine } from '../src/engine/strategicMatchEngine';
+import { createStrategicMatchEngine, getMatchDebugSnapshot } from '../src/engine/strategicMatchEngine';
 import type { Player, Team } from '../src/types';
 
 interface EngineInternals {
@@ -187,11 +187,16 @@ test('an opponent winning the ball in midfield settles and releases it instead o
   state.stealBall(tackler, true);
   state.rng = () => 0.99;
   const tacklePosition = { ...tackler.pos };
+  let outletPass: ReturnType<typeof getMatchDebugSnapshot>['lastPass'] = null;
 
   engine.setInput(emptyInput());
-  for (let frame = 0; frame < 96; frame += 1) engine.update(1 / 60);
+  for (let frame = 0; frame < 96; frame += 1) {
+    engine.update(1 / 60);
+    const pass = getMatchDebugSnapshot(engine).lastPass;
+    if (!outletPass && pass?.fromId === tackler.id && pass.toId !== tackler.id) outletPass = pass;
+  }
 
   const travelled = Math.hypot(tackler.pos.x - tacklePosition.x, tackler.pos.y - tacklePosition.y);
-  assert.notEqual(state.carrier?.id, tackler.id, 'the tackle winner kept dribbling instead of releasing to a teammate');
+  assert.ok(outletPass, 'the tackle winner never released the ball to a different teammate');
   assert.ok(travelled < 10, `the tackle winner glided ${travelled.toFixed(2)}m immediately after the turnover`);
 });
