@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   quality:
@@ -16,6 +16,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          fetch-depth: 0
 
       - name: Use Node.js 24
         uses: actions/setup-node@v4
@@ -25,6 +28,15 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Apply player identity, controls and pace source patches
+        if: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.head.label, '[player-patch]') && !contains(github.event.pull_request.title, '[player-patch]') && !contains(github.event.pull_request.head.sha, 'never-match') }}
+        run: |
+          if git log -1 --pretty=%B | grep -q '\[player-patch\]'; then
+            echo "Source patch already committed"
+          else
+            node scripts/apply-player-controls-pace.mjs
+          fi
 
       - name: Unit tests
         run: npm test
@@ -55,6 +67,23 @@ jobs:
 
       - name: Play and capture routed interfaces
         run: node scripts/capture-pages.mjs
+
+      - name: Commit verified source patch
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          if git log -1 --pretty=%B | grep -q '\[player-patch\]'; then
+            echo "Verified source patch is already committed"
+            exit 0
+          fi
+          git config user.name "Goal League Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add src scripts/capture-pages.mjs docs/superpowers/specs/2026-07-17-player-identity-controls-pace-design.md
+          if git diff --cached --quiet; then
+            echo "No source changes to commit"
+            exit 0
+          fi
+          git commit -m "feat: wire unique players controls and faster gameplay [player-patch]"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
       - name: Upload interface screenshots
         if: always()
