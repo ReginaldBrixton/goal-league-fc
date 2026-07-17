@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   quality:
@@ -16,9 +16,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref }}
-          fetch-depth: 0
 
       - name: Use Node.js 24
         uses: actions/setup-node@v4
@@ -29,40 +26,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply player identity, controls and pace source patches
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          if git log -1 --pretty=%B | grep -q '\[player-patch\]'; then
-            echo "Source patch already committed"
-          else
-            node scripts/apply-player-controls-pace.mjs
-            python3 - <<'PY'
-          from pathlib import Path
-          path = Path('src/components/GamePage.tsx')
-          text = path.read_text()
-          marker = 'function clampRating(value: number): number {'
-          initializer = '''const emptyInput = (): InputState => ({
-            up: false,
-            down: false,
-            left: false,
-            right: false,
-            pass: false,
-            shoot: false,
-            switchPlayer: false,
-            slide: false,
-            moveX: 0,
-            moveY: 0,
-          });
-
-          '''
-          if 'const emptyInput = (): InputState' not in text:
-              if marker not in text:
-                  raise SystemExit('GamePage clampRating marker not found')
-              text = text.replace(marker, initializer + marker, 1)
-              path.write_text(text)
-          PY
-          fi
-
       - name: Unit tests
         run: npm test
 
@@ -70,21 +33,7 @@ jobs:
         run: npm run lint
 
       - name: Build production bundle
-        run: |
-          set +e
-          npm run build > /tmp/goal-league-build.log 2>&1
-          status=$?
-          cat /tmp/goal-league-build.log
-          exit $status
-
-      - name: Upload build diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: goal-league-player-feature-build-diagnostics
-          path: /tmp/goal-league-build.log
-          if-no-files-found: warn
-          retention-days: 2
+        run: npm run build
 
       - name: Install Playwright for capture
         run: |
@@ -106,23 +55,6 @@ jobs:
 
       - name: Play and capture routed interfaces
         run: node scripts/capture-pages.mjs
-
-      - name: Commit verified source patch
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          if git log -1 --pretty=%B | grep -q '\[player-patch\]'; then
-            echo "Verified source patch is already committed"
-            exit 0
-          fi
-          git config user.name "Goal League Automation"
-          git config user.email "actions@users.noreply.github.com"
-          git add src scripts/capture-pages.mjs docs/superpowers/specs/2026-07-17-player-identity-controls-pace-design.md
-          if git diff --cached --quiet; then
-            echo "No source changes to commit"
-            exit 0
-          fi
-          git commit -m "feat: wire unique players controls and faster gameplay [player-patch]"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
       - name: Upload interface screenshots
         if: always()
