@@ -36,6 +36,31 @@ jobs:
             echo "Source patch already committed"
           else
             node scripts/apply-player-controls-pace.mjs
+            python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/components/GamePage.tsx')
+          text = path.read_text()
+          marker = 'function clampRating(value: number): number {'
+          initializer = '''const emptyInput = (): InputState => ({
+            up: false,
+            down: false,
+            left: false,
+            right: false,
+            pass: false,
+            shoot: false,
+            switchPlayer: false,
+            slide: false,
+            moveX: 0,
+            moveY: 0,
+          });
+
+          '''
+          if 'const emptyInput = (): InputState' not in text:
+              if marker not in text:
+                  raise SystemExit('GamePage clampRating marker not found')
+              text = text.replace(marker, initializer + marker, 1)
+              path.write_text(text)
+          PY
           fi
 
       - name: Unit tests
