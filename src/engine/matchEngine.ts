@@ -1,5 +1,6 @@
 import type { FormationKey, MatchEvent, MatchResult, Player, Team } from '../types';
 import { formationPositions } from '../data/formations';
+import { PASS_SPEED_MULTIPLIER, SHOT_SPEED_MULTIPLIER, USER_ACCELERATION, playerTopSpeed } from './matchPace';
 
 const PITCH_X = 105;
 const PITCH_Y = 68;
@@ -454,7 +455,7 @@ export class MatchEngine {
 
     if (dx !== 0 || dy !== 0) {
       const direction = norm({ x: dx, y: dy });
-      const acceleration = clamp(dt * 14, 0, 1);
+      const acceleration = clamp(dt * USER_ACCELERATION, 0, 1);
       entity.vel.x = lerp(entity.vel.x, direction.x * maxSpeed, acceleration);
       entity.vel.y = lerp(entity.vel.y, direction.y * maxSpeed, acceleration);
     } else {
@@ -720,7 +721,7 @@ export class MatchEngine {
     };
     const direction = norm({ x: target.x - entity.pos.x, y: target.y - entity.pos.y });
     const passDistance = dist(entity.pos, target);
-    const power = clamp(13 + passDistance * 0.35 + passing / 14, 14, 28);
+    const power = clamp(13 + passDistance * 0.35 + passing / 14, 14, 28) * PASS_SPEED_MULTIPLIER;
 
     this.lastTouch = entity;
     this.ball = {
@@ -767,7 +768,7 @@ export class MatchEngine {
       direction = norm({ x: goalX - entity.pos.x, y: targetY - entity.pos.y });
     }
 
-    const power = clamp(24 + shooting / 5 + Math.min(distanceToGoal, 35) * 0.12, 27, 44);
+    const power = clamp(24 + shooting / 5 + Math.min(distanceToGoal, 35) * 0.12, 27, 44) * SHOT_SPEED_MULTIPLIER;
 
     this.lastTouch = entity;
     this.ball = {
@@ -865,7 +866,7 @@ export class MatchEngine {
   }
 
   private maxSpeed(player: Player): number {
-    return 5.8 + clamp(player.pace, 20, 99) / 99 * 3.2;
+    return playerTopSpeed(player.pace);
   }
 
   render(ctx: CanvasRenderingContext2D, width: number, height: number): void {

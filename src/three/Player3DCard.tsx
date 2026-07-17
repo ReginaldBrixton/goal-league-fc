@@ -77,7 +77,7 @@ export function Player3DCard({
               teamId={teamId}
               primaryColor={primary}
               secondaryColor={secondary}
-              number={player.rating}
+              number={Number(player.id.replace(/\D/g, '').slice(-3)) || player.rating}
               isGK={player.position === 'GK'}
               animation={anim}
               highlight={selected}

@@ -18,6 +18,7 @@ import {
 import type { MatchResult, Player } from '../types';
 import { AnalogJoystick } from '../input/AnalogJoystick';
 import { usePressControls } from '../input/usePressControls';
+import { keyboardAction } from '../input/desktopControls';
 import { LiveMatch3D } from '../three/LiveMatch3D';
 import { readMatchSettings } from '../utils/matchSettings';
 import './GameControls.css';
@@ -25,16 +26,6 @@ import './GameControls.css';
 interface GamePageProps {
   gameId: string;
 }
-
-type KeyboardAction =
-  | 'up'
-  | 'down'
-  | 'left'
-  | 'right'
-  | 'pass'
-  | 'shoot'
-  | 'switchPlayer'
-  | 'slide';
 
 const emptyInput = (): InputState => ({
   up: false,
@@ -48,27 +39,6 @@ const emptyInput = (): InputState => ({
   moveX: 0,
   moveY: 0,
 });
-
-function keyboardAction(code: string): KeyboardAction | null {
-  switch (code) {
-    case 'ArrowUp':
-    case 'KeyW': return 'up';
-    case 'ArrowDown':
-    case 'KeyS': return 'down';
-    case 'ArrowLeft':
-    case 'KeyA': return 'left';
-    case 'ArrowRight':
-    case 'KeyD': return 'right';
-    case 'Space':
-    case 'KeyJ': return 'pass';
-    case 'KeyK': return 'shoot';
-    case 'KeyL': return 'slide';
-    case 'ShiftLeft':
-    case 'ShiftRight':
-    case 'KeyQ': return 'switchPlayer';
-    default: return null;
-  }
-}
 
 function clampRating(value: number): number {
   return Math.max(20, Math.min(99, value));
@@ -293,6 +263,14 @@ export function GamePage({ gameId }: GamePageProps) {
       </div>
 
       <button type="button" className="game-pause-button" onClick={togglePause} aria-label="Pause match">Ⅱ</button>
+
+      <div className="game-desktop-controls" aria-label="Desktop controls">
+        <span><kbd>↑↓←→</kbd> MOVE</span>
+        <span><kbd>W</kbd> PASS</span>
+        <span><kbd>A</kbd> SWITCH</span>
+        <span><kbd>S</kbd> TACKLE</span>
+        <span><kbd>D</kbd> SHOOT</span>
+      </div>
 
       <div className="game-touch-controls" aria-label="On-screen football controls" onContextMenu={(event) => event.preventDefault()}>
         <AnalogJoystick inputRef={inputRef} disabled={controlsDisabled} />

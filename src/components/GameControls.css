@@ -214,3 +214,50 @@
     transform-origin: left bottom;
   }
 }
+
+
+.game-desktop-controls {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  z-index: 18;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(4, 12, 18, 0.74);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+.game-desktop-controls span {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  color: rgba(239, 248, 255, 0.78);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.game-desktop-controls kbd {
+  min-width: 24px;
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom-color: rgba(255, 255, 255, 0.34);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font: inherit;
+  text-align: center;
+}
+
+@media (max-width: 900px), (pointer: coarse) {
+  .game-desktop-controls {
+    display: none;
+  }
+}

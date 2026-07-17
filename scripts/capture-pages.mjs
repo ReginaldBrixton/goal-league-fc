@@ -208,12 +208,40 @@ function trackBrowserErrors(page) {
   return { pageErrors, consoleErrors };
 }
 
+async function verifyDesktopKeyboard(page) {
+  const checks = [
+    ['ArrowRight', 'right'],
+    ['ArrowUp', 'up'],
+    ['w', 'pass'],
+    ['a', 'switchPlayer'],
+    ['s', 'slide'],
+    ['d', 'shoot'],
+  ];
+
+  for (const [key, action] of checks) {
+    await page.keyboard.down(key);
+    await page.waitForFunction(
+      (name) => Boolean(window.__goalLeagueDebug?.input()[name]),
+      action,
+      { timeout: 2_000 },
+    );
+    await page.keyboard.up(key);
+    await page.waitForFunction(
+      (name) => !window.__goalLeagueDebug?.input()[name],
+      action,
+      { timeout: 2_000 },
+    );
+  }
+  console.log('Desktop keyboard evidence: arrows=movement W=pass A=switch S=tackle D=shoot');
+}
+
 async function captureDesktop() {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
   const page = await context.newPage();
   const errors = trackBrowserErrors(page);
   await enterMatch(page);
   await assertGameplayLayout(page);
+  await verifyDesktopKeyboard(page);
   await page.screenshot({ path: `${screenshotDir}/05-game-desktop.png`, fullPage: false, animations: 'disabled' });
   assert.deepEqual(errors.pageErrors, []);
   assert.deepEqual(errors.consoleErrors, []);

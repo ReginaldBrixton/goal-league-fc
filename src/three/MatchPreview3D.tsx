@@ -50,7 +50,7 @@ function LineupPlayer({
       teamId={team.id}
       primaryColor={team.color}
       secondaryColor={team.color2}
-      number={index + 1}
+      number={Number(player.id.replace(/\D/g, '').slice(-3)) || index + 1}
       isGK={player.position === 'GK'}
       animation={anim}
     />
