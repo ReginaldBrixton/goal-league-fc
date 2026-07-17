@@ -30,7 +30,7 @@ jobs:
         run: npm ci
 
       - name: Apply player identity, controls and pace source patches
-        if: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.head.label, '[player-patch]') && !contains(github.event.pull_request.title, '[player-patch]') && !contains(github.event.pull_request.head.sha, 'never-match') }}
+        if: ${{ github.event_name == 'pull_request' }}
         run: |
           if git log -1 --pretty=%B | grep -q '\[player-patch\]'; then
             echo "Source patch already committed"
@@ -45,7 +45,21 @@ jobs:
         run: npm run lint
 
       - name: Build production bundle
-        run: npm run build
+        run: |
+          set +e
+          npm run build > /tmp/goal-league-build.log 2>&1
+          status=$?
+          cat /tmp/goal-league-build.log
+          exit $status
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: goal-league-player-feature-build-diagnostics
+          path: /tmp/goal-league-build.log
+          if-no-files-found: warn
+          retention-days: 2
 
       - name: Install Playwright for capture
         run: |
