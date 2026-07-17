@@ -6,7 +6,7 @@ Make every generated footballer visually identifiable, give desktop players the 
 
 ## Player identity architecture
 
-Each deterministic player ID from `p1` through `p232` receives its own appearance module under `src/data/playerAppearances/players/`. Every module exports a complete `PlayerAppearance` profile. The registry in `src/data/playerAppearances/index.ts` resolves these files by player ID and supplies a deterministic fallback for future IDs.
+Each deterministic player ID from `p1` through `p232` receives its own complete `PlayerAppearance` profile. The profiles are organised across multiple focused player-range modules under `src/data/playerAppearances/players/` so the data remains independent without creating one oversized registry file. The registry in `src/data/playerAppearances/index.ts` resolves these files by player ID and supplies a deterministic fallback for future IDs.
 
 Profiles vary skin tone, hair colour and style, facial hair, face proportions, height, shoulder width, leg length, boots and one lightweight accessory. `PlayerModel` consumes the profile in both detailed cards and live matches. Match geometry remains deliberately low-poly and does not load external textures or models.
 

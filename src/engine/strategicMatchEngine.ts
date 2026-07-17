@@ -2,6 +2,7 @@ import '../input/analogInputTypes';
 import type { FormationKey, MatchResult, Player, Team } from '../types';
 import { MatchEngine, type Entity, type HudState, type InputState, type Vec } from './matchEngine';
 import { integrateControlledVelocity, resolveControlledMovement } from './playerMovement';
+import { PASS_SPEED_MULTIPLIER } from './matchPace';
 import {
   assignDefensiveRoles,
   createTacticalMemory,
@@ -205,7 +206,7 @@ function executeStrategicPass(
   };
   const direction = normalize({ x: target.x - entity.pos.x, y: target.y - entity.pos.y });
   const passDistance = distance(entity.pos, target);
-  const power = clamp(13 + passDistance * 0.35 + passing / 14, 14, 28);
+  const power = clamp(13 + passDistance * 0.35 + passing / 14, 14, 28) * PASS_SPEED_MULTIPLIER;
 
   internal.lastTouch = entity;
   internal.ball = {
